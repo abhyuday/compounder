@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0e1116" />
+<title>Compounder</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c232d;
+    --border: #262e3a;
+    --text: #e6edf3;
+    --muted: #8b98a9;
+    --faint: #5c6773;
+    --done: #3fb950;
+    --done-soft: rgba(63, 185, 80, 0.14);
+    --accent: #d9a441;
+    --money: #58a6ff;
+    --health: #3fb950;
+    --family: #db6d9c;
+    --self: #a371f7;
+    --radius: 14px;
+    --shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+    padding: 28px 18px 64px;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; }
+
+  /* Header */
+  header { margin-bottom: 22px; }
+  .brand {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+  h1 {
+    font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 0;
+    display: flex; align-items: center; gap: 9px;
+  }
+  h1 .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px var(--accent); }
+  .date { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .tagline { color: var(--faint); font-size: 13px; margin-top: 6px; }
+
+  /* Week bar */
+  .week {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; margin-bottom: 22px; box-shadow: var(--shadow);
+  }
+  .week-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .week-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
+  .week-num { font-variant-numeric: tabular-nums; }
+  .week-num b { font-size: 22px; font-weight: 700; }
+  .week-num .target { color: var(--accent); }
+  .week-num .poss { color: var(--faint); font-size: 13px; }
+
+  .track { height: 10px; border-radius: 6px; background: var(--panel-2); position: relative; overflow: hidden; }
+  .track .fill { position: absolute; top: 0; left: 0; bottom: 0; background: linear-gradient(90deg, #2ea043, #3fb950); border-radius: 6px; transition: width .35s ease; }
+  .track .goal { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .week-foot { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 18px; }
+  .week-foot b { color: var(--text); }
+
+  /* Cards */
+  .cards { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; box-shadow: var(--shadow); cursor: pointer; user-select: none;
+    transition: border-color .18s ease, background .18s ease, transform .06s ease;
+    position: relative; overflow: hidden;
+  }
+  .card:active { transform: scale(0.995); }
+  .card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    background: var(--dc); opacity: .85;
+  }
+  .card[data-domain="money"]  { --dc: var(--money); }
+  .card[data-domain="health"] { --dc: var(--health); }
+  .card[data-domain="family"] { --dc: var(--family); }
+  .card[data-domain="self"]   { --dc: var(--self); }
+
+  .card.done { background: linear-gradient(0deg, var(--done-soft), var(--done-soft)), var(--panel); border-color: rgba(63,185,80,0.4); }
+
+  .card-head { display: flex; align-items: center; gap: 12px; }
+  .check {
+    flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px;
+    border: 2px solid var(--border); background: var(--panel-2);
+    display: grid; place-items: center; transition: all .18s ease;
+  }
+  .card.done .check { background: var(--done); border-color: var(--done); }
+  .check svg { width: 15px; height: 15px; stroke: #0e1116; stroke-width: 3.2; fill: none; opacity: 0; transform: scale(.6); transition: all .18s ease; }
+  .card.done .check svg { opacity: 1; transform: scale(1); }
+
+  .domain { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dc); font-weight: 600; }
+  .move { font-size: 15px; color: var(--text); margin-top: 3px; }
+  .scored { font-size: 12px; color: var(--faint); margin-top: 7px; padding-left: 38px; }
+  .card.done .scored { color: var(--muted); }
+  .flex-title { flex: 1; }
+  .status { font-size: 12.5px; font-weight: 600; color: var(--faint); white-space: nowrap; }
+  .card.done .status { color: var(--done); }
+
+  /* Today score */
+  .today {
+    margin: 22px 0 8px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; color: var(--muted);
+  }
+  .today b { color: var(--text); font-size: 15px; }
+  .pips { display: flex; gap: 6px; }
+  .pip { width: 10px; height: 10px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--border); }
+  .pip.on { background: var(--done); border-color: var(--done); box-shadow: 0 0 8px rgba(63,185,80,.5); }
+
+  /* Week grid */
+  .grid-wrap { margin-top: 30px; }
+  .grid-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .navbtn { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 7px; padding: 3px 9px; font-size: 12px; cursor: pointer; }
+  .navbtn:hover { color: var(--text); }
+  .navbtn:disabled { opacity: .4; cursor: default; }
+  .grid { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .grid th { font-weight: 500; color: var(--faint); text-align: center; padding: 6px 2px; font-variant-numeric: tabular-nums; }
+  .grid th.rowh { text-align: left; width: 66px; }
+  .grid td { text-align: center; padding: 5px 2px; }
+  .grid td.rowh { text-align: left; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; }
+  .cell { width: 15px; height: 15px; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--border); display: inline-block; }
+  .cell.on { border: none; }
+  .cell.on[data-d="money"]  { background: var(--money); }
+  .cell.on[data-d="health"] { background: var(--health); }
+  .cell.on[data-d="family"] { background: var(--family); }
+  .cell.on[data-d="self"]   { background: var(--self); }
+  .grid tr.total td { padding-top: 9px; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .grid tr.total td.tt { font-weight: 700; color: var(--text); }
+  .grid td.today-col { background: rgba(217,164,65,0.07); border-radius: 4px; }
+  .grid th.today-col { color: var(--accent); }
+
+  footer { margin-top: 40px; text-align: center; color: var(--faint); font-size: 12px; line-height: 1.7; }
+  footer .big { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1><span class="dot"></span>Compounder</h1>
+      <span class="date" id="date"></span>
+    </div>
+    <div class="tagline">Four points a day. Target is 20 a week — not 28. That number is the whole system.</div>
+  </header>
+
+  <section class="week">
+    <div class="week-top">
+      <span class="week-label" id="weekLabel">This week</span>
+      <span class="week-num"><b id="weekPts">0</b><span class="poss"> / <span class="target">20 target</span> · 28 possible</span></span>
+    </div>
+    <div class="track">
+      <div class="fill" id="weekFill" style="width:0%"></div>
+      <div class="goal" id="weekGoal"></div>
+    </div>
+    <div class="week-foot" id="weekFoot"></div>
+  </section>
+
+  <section class="cards" id="cards"></section>
+
+  <div class="today">
+    <span>Today — <b id="todayScore">0</b> of 4</span>
+    <span class="pips" id="pips"></span>
+  </div>
+
+  <section class="grid-wrap">
+    <div class="grid-title">
+      <button class="navbtn" id="prevWeek">← prev</button>
+      <span id="gridRange"></span>
+      <button class="navbtn" id="nextWeek">next →</button>
+    </div>
+    <table class="grid" id="grid"></table>
+  </section>
+
+  <footer>
+    <div class="big">A bad week is 20. A perfect week is a trap.</div>
+    <div>Progress is saved on this device only.</div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORE = "compounder.v1";
+  var TARGET = 20;
+
+  var DOMAINS = [
+    { key: "money",  name: "Money",  move: "One 15-min deliberate action — fund the Roth, write one thesis paragraph, one advisory outreach, one position reconciled. Checking your P&L does not count.", scored: "Done / not" },
+    { key: "health", name: "Health", move: "One of: zone 2, lift, or 8K steps — plus lights-out by your target time.", scored: "Done / not" },
+    { key: "family", name: "Family", move: "One defended block with a specific person, phone in another room.", scored: "Block happened / didn't" },
+    { key: "self",   name: "Self",   move: "30 minutes with zero ROI — a film, a book, a walk.", scored: "Happened / didn't" }
+  ];
+
+  // ---- storage ----
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORE)) || {}; }
+    catch (e) { return {}; }
+  }
+  function save(d) { localStorage.setItem(STORE, JSON.stringify(d)); }
+  var data = load();
+
+  // ---- date helpers (local time) ----
+  function ymd(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function mondayOf(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var day = (x.getDay() + 6) % 7; // Mon=0 ... Sun=6
+    x.setDate(x.getDate() - day);
+    return x;
+  }
+  function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+
+  var today = new Date();
+  var todayKey = ymd(today);
+  var thisMonday = mondayOf(today);
+  var viewMonday = new Date(thisMonday); // week currently shown in grid
+
+  function dayEntry(key) {
+    return data[key] || { money: false, health: false, family: false, self: false };
+  }
+  function dayPoints(key) {
+    var e = data[key]; if (!e) return 0;
+    return (e.money?1:0) + (e.health?1:0) + (e.family?1:0) + (e.self?1:0);
+  }
+  function weekPoints(monday) {
+    var t = 0;
+    for (var i = 0; i < 7; i++) t += dayPoints(ymd(addDays(monday, i)));
+    return t;
+  }
+
+  // ---- render: header + cards (always today) ----
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  document.getElementById("date").textContent =
+    DAYS[today.getDay()] + ", " + MONTHS[today.getMonth()] + " " + today.getDate();
+
+  var cardsEl = document.getElementById("cards");
+  var checkSVG = '<svg viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function renderCards() {
+    var e = dayEntry(todayKey);
+    cardsEl.innerHTML = "";
+    DOMAINS.forEach(function (dom) {
+      var on = !!e[dom.key];
+      var card = document.createElement("div");
+      card.className = "card" + (on ? " done" : "");
+      card.setAttribute("data-domain", dom.key);
+      card.innerHTML =
+        '<div class="card-head">' +
+          '<div class="check">' + checkSVG + '</div>' +
+          '<div class="flex-title">' +
+            '<div class="domain">' + dom.name + '</div>' +
+            '<div class="move">' + dom.move + '</div>' +
+          '</div>' +
+          '<div class="status">' + (on ? "Done" : "Not yet") + '</div>' +
+        '</div>' +
+        '<div class="scored">' + dom.scored + '</div>';
+      card.addEventListener("click", function () { toggle(dom.key); });
+      cardsEl.appendChild(card);
+    });
+  }
+
+  function toggle(key) {
+    var e = dayEntry(todayKey);
+    e[key] = !e[key];
+    data[todayKey] = e;
+    save(data);
+    renderAll();
+  }
+
+  // ---- render: today score pips ----
+  function renderToday() {
+    var pts = dayPoints(todayKey);
+    document.getElementById("todayScore").textContent = pts;
+    var pips = document.getElementById("pips");
+    pips.innerHTML = "";
+    for (var i = 0; i < 4; i++) {
+      var p = document.createElement("span");
+      p.className = "pip" + (i < pts ? " on" : "");
+      pips.appendChild(p);
+    }
+  }
+
+  // ---- render: week bar (always THIS week) ----
+  function renderWeekBar() {
+    var pts = weekPoints(thisMonday);
+    document.getElementById("weekPts").textContent = pts;
+    var pct = Math.min(100, (pts / 28) * 100);
+    document.getElementById("weekFill").style.width = pct + "%";
+    document.getElementById("weekGoal").style.left = ((TARGET / 28) * 100) + "%";
+
+    var foot = document.getElementById("weekFoot");
+    var remaining = TARGET - pts;
+    if (pts >= TARGET) {
+      foot.innerHTML = "✓ <b>Target hit.</b> Everything past 20 is a bonus, not the point.";
+    } else {
+      var dayIdx = (today.getDay() + 6) % 7; // 0..6
+      var daysLeft = 6 - dayIdx; // days after today in the week
+      foot.innerHTML = "<b>" + remaining + "</b> more to hit 20 · " + (daysLeft + 1) + " day" + (daysLeft === 0 ? "" : "s") + " left this week.";
+    }
+  }
+
+  // ---- render: week grid (navigable) ----
+  function renderGrid() {
+    var grid = document.getElementById("grid");
+    var range = document.getElementById("gridRange");
+    var sun = addDays(viewMonday, 6);
+    range.textContent = MONTHS[viewMonday.getMonth()] + " " + viewMonday.getDate() + " – " +
+      (viewMonday.getMonth() === sun.getMonth() ? sun.getDate() : MONTHS[sun.getMonth()] + " " + sun.getDate());
+
+    var isThisWeek = ymd(viewMonday) === ymd(thisMonday);
+    document.getElementById("nextWeek").disabled = isThisWeek;
+
+    var html = "<thead><tr><th class='rowh'></th>";
+    for (var i = 0; i < 7; i++) {
+      var d = addDays(viewMonday, i);
+      var isToday = ymd(d) === todayKey;
+      html += "<th class='" + (isToday ? "today-col" : "") + "'>" + DAYS[d.getDay()][0] + "<br>" + d.getDate() + "</th>";
+    }
+    html += "</tr></thead><tbody>";
+
+    DOMAINS.forEach(function (dom) {
+      html += "<tr><td class='rowh'>" + dom.name + "</td>";
+      for (var i = 0; i < 7; i++) {
+        var d = addDays(viewMonday, i);
+        var isToday = ymd(d) === todayKey;
+        var on = !!dayEntry(ymd(d))[dom.key];
+        html += "<td class='" + (isToday ? "today-col" : "") + "'><span class='cell " + (on ? "on" : "") + "' data-d='" + dom.key + "'></span></td>";
+      }
+      html += "</tr>";
+    });
+
+    // totals row
+    html += "<tr class='total'><td class='rowh tt'>Total</td>";
+    for (var i = 0; i < 7; i++) {
+      var d = addDays(viewMonday, i);
+      var isToday = ymd(d) === todayKey;
+      var future = d > today;
+      var p = dayPoints(ymd(d));
+      html += "<td class='" + (isToday ? "today-col" : "") + "'>" + (future && p === 0 ? "·" : p) + "</td>";
+    }
+    html += "</tr></tbody>";
+    grid.innerHTML = html;
+
+    // week summary under grid via foot reuse not needed; show week total in range title
+    var wp = weekPoints(viewMonday);
+    range.textContent += "  ·  " + wp + " pts" + (wp >= TARGET ? " ✓" : "");
+  }
+
+  function renderAll() {
+    renderCards();
+    renderToday();
+    renderWeekBar();
+    renderGrid();
+  }
+
+  document.getElementById("prevWeek").addEventListener("click", function () {
+    viewMonday = addDays(viewMonday, -7); renderGrid();
+  });
+  document.getElementById("nextWeek").addEventListener("click", function () {
+    if (ymd(viewMonday) === ymd(thisMonday)) return;
+    viewMonday = addDays(viewMonday, 7); renderGrid();
+  });
+
+  // If the app was left open past midnight, refresh "today" on focus.
+  window.addEventListener("focus", function () {
+    var nk = ymd(new Date());
+    if (nk !== todayKey) location.reload();
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
