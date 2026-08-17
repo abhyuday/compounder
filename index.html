@@ -54,9 +54,10 @@
   /* Header */
   header { margin-bottom: 22px; }
   .brand {
-    display: flex; align-items: baseline; justify-content: space-between;
-    gap: 12px; flex-wrap: wrap;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
   }
+  .brand-right { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
   h1 {
     font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin: 0;
     display: flex; align-items: center; gap: 9px;
@@ -270,19 +271,20 @@
   footer { margin-top: 40px; text-align: center; color: var(--faint); font-size: 12px; line-height: 1.7; }
   footer .big { color: var(--muted); }
 
-  /* Sync / auth */
-  .syncrow { display: flex; justify-content: flex-end; margin: -6px 0 18px; }
+  /* Sync / auth — compact control in the header */
   .pill {
-    display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer; flex: 0 0 auto;
     background: var(--panel); border: 1px solid var(--border); color: var(--muted);
-    border-radius: 999px; padding: 6px 13px; font-size: 12.5px; transition: all .15s ease;
+    border-radius: 999px; padding: 5px 12px; font-size: 12.5px; transition: all .15s ease;
   }
   .pill:hover { color: var(--text); border-color: #33404f; }
-  .pill .st { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
-  .pill.synced { color: var(--done); border-color: rgba(63,185,80,0.35); }
-  .pill.synced .st { background: var(--done); box-shadow: 0 0 8px rgba(63,185,80,.5); }
-  .pill.busy .st { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-  .pill.err .st { background: #db6d6d; }
+  /* Signed in: just an avatar, with a status-coloured ring (no chrome). */
+  .pill.signedin { background: none; border: none; padding: 0; }
+  .pill-av, .pill-ph { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); box-sizing: border-box; }
+  .pill-ph { display: grid; place-items: center; background: var(--panel-2); color: var(--muted); font-weight: 700; font-size: 13px; }
+  .pill.signedin.synced .pill-av, .pill.signedin.synced .pill-ph { border-color: var(--done); }
+  .pill.signedin.busy .pill-av, .pill.signedin.busy .pill-ph { border-color: var(--accent); }
+  .pill.signedin.err .pill-av, .pill.signedin.err .pill-ph { border-color: #db6d6d; }
 
   .auth-panel {
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -324,7 +326,6 @@
   }
   .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 
-  .pill-av { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
   .profile { display: flex; align-items: center; gap: 13px; }
   .who-av { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
   .who-av.ph { display: grid; place-items: center; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); font-weight: 700; font-size: 18px; }
@@ -350,6 +351,9 @@
     .cell { width: 18px; height: 18px; }
     .hseg { height: 18px; }
 
+    /* Keep the header tidy on phones — the day switcher already shows the date */
+    .brand .date { display: none; }
+
     /* Comfortable checkbox hit areas */
     .sub { padding: 11px; }
     .be-toggle { padding: 11px; }
@@ -368,14 +372,13 @@
   <header>
     <div class="brand">
       <h1><span class="dot"></span>Compounder</h1>
-      <span class="date" id="date"></span>
+      <div class="brand-right">
+        <span class="date" id="date"></span>
+        <span class="pill" id="syncPill"><span>Sign in</span></span>
+      </div>
     </div>
     <div class="tagline">Four points a day. Target is 20 a week — not 28. That number is the whole system.</div>
   </header>
-
-  <div class="syncrow">
-    <span class="pill" id="syncPill"><span class="st"></span><span id="syncText">Sync across devices</span></span>
-  </div>
 
   <section class="auth-panel" id="authPanel"></section>
 
@@ -1057,7 +1060,6 @@
   var syncing = false;
 
   var pillEl = document.getElementById("syncPill");
-  var syncTextEl = document.getElementById("syncText");
   var panelEl = document.getElementById("authPanel");
 
   function meta() { return (session && session.user && session.user.user_metadata) || {}; }
@@ -1066,16 +1068,16 @@
   function userAvatar() { var m = meta(); return m.avatar_url || m.picture || ""; }
 
   function setPill(state, text) {
-    pillEl.className = "pill" + (state ? " " + state : "");
-    pillEl.title = text || "";
+    pillEl.className = "pill" + (state ? " " + state : "") + (session ? " signedin" : "");
     if (session) {
+      pillEl.title = userName() + (text ? " · " + text : "");
       var av = userAvatar();
-      pillEl.innerHTML =
-        '<span class="st"></span>' +
-        (av ? '<img class="pill-av" src="' + escapeHtml(av) + '" referrerpolicy="no-referrer" alt="">' : "") +
-        '<span>' + escapeHtml(firstName()) + "</span>";
+      pillEl.innerHTML = av
+        ? '<img class="pill-av" src="' + escapeHtml(av) + '" referrerpolicy="no-referrer" alt="">'
+        : '<span class="pill-ph">' + escapeHtml((userName()[0] || "?").toUpperCase()) + '</span>';
     } else {
-      pillEl.innerHTML = '<span class="st"></span><span>' + escapeHtml(text || "Sync across devices") + "</span>";
+      pillEl.title = "Sign in to sync across devices";
+      pillEl.innerHTML = '<span>Sign in</span>';
     }
   }
 
