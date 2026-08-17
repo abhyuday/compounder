@@ -68,6 +68,20 @@
   .week-foot { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 18px; }
   .week-foot b { color: var(--text); }
 
+  /* Day switcher */
+  .dayswitch { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .daynav {
+    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    width: 40px; height: 40px; border-radius: 10px; cursor: pointer; font-size: 13px;
+    display: grid; place-items: center; transition: all .15s ease; flex: 0 0 auto;
+  }
+  .daynav:hover:not(:disabled) { color: var(--text); border-color: #33404f; }
+  .daynav:disabled { opacity: .32; cursor: default; }
+  .daymid { text-align: center; line-height: 1.25; }
+  .daylabel { font-size: 15px; font-weight: 600; color: var(--text); }
+  .daytoday { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; padding: 1px 0 0; }
+  .daytoday.hidden { display: none; }
+
   /* Cards */
   .cards { display: flex; flex-direction: column; gap: 12px; }
   .card {
@@ -133,6 +147,11 @@
   .cell.on[data-d="health"] { background: var(--health); }
   .cell.on[data-d="family"] { background: var(--family); }
   .cell.on[data-d="self"]   { background: var(--self); }
+  .cell.editable { cursor: pointer; }
+  .cell.editable:hover { outline: 2px solid rgba(139,152,169,0.55); outline-offset: 1px; }
+  .cell.future { opacity: .4; }
+  .grid td.sel-col { background: rgba(88,166,255,0.10); border-radius: 4px; }
+  .grid th.sel-col { color: var(--money); }
   .grid tr.total td { padding-top: 9px; font-variant-numeric: tabular-nums; color: var(--muted); }
   .grid tr.total td.tt { font-weight: 700; color: var(--text); }
   .grid td.today-col { background: rgba(217,164,65,0.07); border-radius: 4px; }
@@ -232,10 +251,19 @@
     <div class="week-foot" id="weekFoot"></div>
   </section>
 
+  <div class="dayswitch">
+    <button class="daynav" id="dayPrev" aria-label="Previous day">◀</button>
+    <div class="daymid">
+      <div class="daylabel" id="dayLabel">Today</div>
+      <button class="daytoday hidden" id="dayToday">Jump to today</button>
+    </div>
+    <button class="daynav" id="dayNext" aria-label="Next day">▶</button>
+  </div>
+
   <section class="cards" id="cards"></section>
 
   <div class="today">
-    <span>Today — <b id="todayScore">0</b> of 4</span>
+    <span><span id="scoreLabel">Today</span> — <b id="todayScore">0</b> of 4</span>
     <span class="pips" id="pips"></span>
   </div>
 
@@ -309,6 +337,16 @@
   var todayKey = ymd(today);
   var thisMonday = mondayOf(today);
   var viewMonday = new Date(thisMonday); // week currently shown in grid
+  var selectedKey = todayKey;            // day the cards currently edit
+  var yesterdayKey = ymd(addDays(today, -1));
+
+  function parseKey(k) { var p = k.split("-"); return new Date(+p[0], (+p[1]) - 1, +p[2]); }
+  function dayLabel(key) {
+    if (key === todayKey) return "Today";
+    if (key === yesterdayKey) return "Yesterday";
+    var d = parseKey(key);
+    return DAYS[d.getDay()] + ", " + MONTHS[d.getMonth()] + " " + d.getDate();
+  }
 
   function dayEntry(key) {
     return data[key] || { money: false, health: false, family: false, self: false };
@@ -334,7 +372,7 @@
   var checkSVG = '<svg viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   function renderCards() {
-    var e = dayEntry(todayKey);
+    var e = dayEntry(selectedKey);
     cardsEl.innerHTML = "";
     DOMAINS.forEach(function (dom) {
       var on = !!e[dom.key];
@@ -351,25 +389,44 @@
           '<div class="status">' + (on ? "Done" : "Not yet") + '</div>' +
         '</div>' +
         '<div class="scored">' + dom.scored + '</div>';
-      card.addEventListener("click", function () { toggle(dom.key); });
+      card.addEventListener("click", function () { setDomain(selectedKey, dom.key); });
       cardsEl.appendChild(card);
     });
   }
 
-  function toggle(key) {
-    var e = dayEntry(todayKey);
+  // Toggle one domain on a given day. Never allows a future day.
+  function setDomain(dayKey, key) {
+    if (dayKey > todayKey) return;
+    var e = dayEntry(dayKey);
     e[key] = !e[key];
     e.updated_at = Date.now();
-    data[todayKey] = e;
+    data[dayKey] = e;
     save(data);
     renderAll();
-    pushDay(todayKey); // sync this day if signed in
+    pushDay(dayKey); // sync this day if signed in
+  }
+
+  function selectDay(key) {
+    if (key > todayKey) key = todayKey; // clamp: no future days
+    selectedKey = key;
+    viewMonday = mondayOf(parseKey(key)); // grid follows the selected day's week
+    renderAll();
+  }
+
+  function renderDaySwitch() {
+    document.getElementById("dayLabel").textContent =
+      dayLabel(selectedKey) + (selectedKey === todayKey || selectedKey === yesterdayKey
+        ? " · " + MONTHS[parseKey(selectedKey).getMonth()] + " " + parseKey(selectedKey).getDate()
+        : "");
+    document.getElementById("dayNext").disabled = (selectedKey === todayKey);
+    document.getElementById("dayToday").classList.toggle("hidden", selectedKey === todayKey);
   }
 
   // ---- render: today score pips ----
   function renderToday() {
-    var pts = dayPoints(todayKey);
+    var pts = dayPoints(selectedKey);
     document.getElementById("todayScore").textContent = pts;
+    document.getElementById("scoreLabel").textContent = dayLabel(selectedKey);
     var pips = document.getElementById("pips");
     pips.innerHTML = "";
     for (var i = 0; i < 4; i++) {
@@ -409,11 +466,15 @@
     var isThisWeek = ymd(viewMonday) === ymd(thisMonday);
     document.getElementById("nextWeek").disabled = isThisWeek;
 
+    function colClass(k) {
+      return (k === todayKey ? " today-col" : "") + (k !== todayKey && k === selectedKey ? " sel-col" : "");
+    }
+
     var html = "<thead><tr><th class='rowh'></th>";
     for (var i = 0; i < 7; i++) {
       var d = addDays(viewMonday, i);
-      var isToday = ymd(d) === todayKey;
-      html += "<th class='" + (isToday ? "today-col" : "") + "'>" + DAYS[d.getDay()][0] + "<br>" + d.getDate() + "</th>";
+      var k = ymd(d);
+      html += "<th class='" + colClass(k).trim() + "'>" + DAYS[d.getDay()][0] + "<br>" + d.getDate() + "</th>";
     }
     html += "</tr></thead><tbody>";
 
@@ -421,9 +482,11 @@
       html += "<tr><td class='rowh'>" + dom.name + "</td>";
       for (var i = 0; i < 7; i++) {
         var d = addDays(viewMonday, i);
-        var isToday = ymd(d) === todayKey;
-        var on = !!dayEntry(ymd(d))[dom.key];
-        html += "<td class='" + (isToday ? "today-col" : "") + "'><span class='cell " + (on ? "on" : "") + "' data-d='" + dom.key + "'></span></td>";
+        var k = ymd(d);
+        var future = d > today;
+        var on = !!dayEntry(k)[dom.key];
+        html += "<td class='" + colClass(k).trim() + "'><span class='cell " + (on ? "on" : "") +
+          (future ? " future" : " editable") + "' data-d='" + dom.key + "' data-day='" + k + "'></span></td>";
       }
       html += "</tr>";
     });
@@ -432,10 +495,10 @@
     html += "<tr class='total'><td class='rowh tt'>Total</td>";
     for (var i = 0; i < 7; i++) {
       var d = addDays(viewMonday, i);
-      var isToday = ymd(d) === todayKey;
+      var k = ymd(d);
       var future = d > today;
-      var p = dayPoints(ymd(d));
-      html += "<td class='" + (isToday ? "today-col" : "") + "'>" + (future && p === 0 ? "·" : p) + "</td>";
+      var p = dayPoints(k);
+      html += "<td class='" + colClass(k).trim() + "'>" + (future && p === 0 ? "·" : p) + "</td>";
     }
     html += "</tr></tbody>";
     grid.innerHTML = html;
@@ -446,11 +509,30 @@
   }
 
   function renderAll() {
+    renderDaySwitch();
     renderCards();
     renderToday();
     renderWeekBar();
     renderGrid();
   }
+
+  // Day switcher controls.
+  document.getElementById("dayPrev").addEventListener("click", function () {
+    selectDay(ymd(addDays(parseKey(selectedKey), -1)));
+  });
+  document.getElementById("dayNext").addEventListener("click", function () {
+    if (selectedKey !== todayKey) selectDay(ymd(addDays(parseKey(selectedKey), 1)));
+  });
+  document.getElementById("dayToday").addEventListener("click", function () {
+    selectDay(todayKey);
+  });
+
+  // Direct back-fill: click any editable grid cell to toggle that day/domain.
+  document.getElementById("grid").addEventListener("click", function (ev) {
+    var cell = ev.target.closest && ev.target.closest(".cell.editable");
+    if (!cell) return;
+    setDomain(cell.getAttribute("data-day"), cell.getAttribute("data-d"));
+  });
 
   document.getElementById("prevWeek").addEventListener("click", function () {
     viewMonday = addDays(viewMonday, -7); renderGrid();
