@@ -84,6 +84,35 @@
   .track .goal { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
   .week-foot { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 18px; }
   .week-foot b { color: var(--text); }
+  .week-streak { color: var(--accent); font-weight: 600; text-transform: none; letter-spacing: 0; }
+
+  /* Focus "start here" marker + celebration toast */
+  .start-here { display: inline-block; font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: #241a04; background: var(--accent); border-radius: 999px; padding: 2px 7px; margin-left: 6px; font-weight: 700; vertical-align: 1px; }
+  .card.start { border-color: rgba(217,164,65,0.55); }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(12px);
+    background: var(--panel-2); border: 1px solid rgba(63,185,80,0.5); color: var(--text);
+    padding: 10px 16px; border-radius: 999px; font-size: 13.5px; font-weight: 600;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45); opacity: 0; pointer-events: none; z-index: 200;
+    transition: opacity .2s ease, transform .2s ease;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* History (compounding view) */
+  #history .hist-sum { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #history .chev { margin-left: 10px; }
+  .hist-stats { display: flex; justify-content: space-around; gap: 8px; padding: 10px 10px 14px; font-size: 11.5px; color: var(--muted); text-align: center; }
+  .hist-stats span { display: flex; flex-direction: column; gap: 1px; }
+  .hist-stats b { color: var(--text); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .hist-plot { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 84px; padding: 0 12px; }
+  .hist-goal { position: absolute; left: 12px; right: 12px; height: 0; border-top: 1px dashed var(--accent); opacity: .5; }
+  .hist-col { flex: 1; display: flex; align-items: flex-end; height: 100%; }
+  .hist-bar { width: 100%; border-radius: 3px 3px 0 0; background: var(--panel-2); border: 1px solid var(--border); }
+  .hist-bar.hit { background: linear-gradient(0deg, #2ea043, #3fb950); border: none; }
+  .hist-col.cur .hist-bar { outline: 1.5px solid var(--accent); outline-offset: -1px; }
+  .hist-labels { display: flex; gap: 6px; padding: 5px 12px 0; }
+  .hist-lbl { flex: 1; text-align: center; font-size: 9.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .hist-cap { font-size: 11px; color: var(--faint); text-align: center; padding: 9px 10px 8px; }
 
   /* Schedule strip */
   .sched { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 18px; box-shadow: var(--shadow); overflow: hidden; }
@@ -98,6 +127,8 @@
   #sched .now-top { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); font-weight: 700; margin-bottom: 3px; font-variant-numeric: tabular-nums; }
   #sched .now-label { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
   #sched .now-note { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+  #sched .now-focus { font-size: 12.5px; color: var(--accent); margin-top: 6px; font-weight: 600; }
+  #sched .now-focus b { color: var(--accent); }
   #sched .sched-now .chev { align-self: center; }
   .sched-body { border-top: 1px solid var(--border); padding: 6px; }
   .blk { display: flex; align-items: flex-start; gap: 12px; padding: 9px 10px; border-radius: 9px; }
@@ -431,7 +462,7 @@
 
   <section class="week">
     <div class="week-top">
-      <span class="week-label" id="weekLabel">This week</span>
+      <span class="week-label" id="weekLabel">This week <span class="week-streak" id="weekStreak"></span></span>
       <span class="week-num"><b id="weekPts">0</b><span class="poss"> / <span class="target" id="weekTargetLbl">25 target</span> · <span id="weekPossLbl">35 possible</span></span></span>
     </div>
     <div class="track">
@@ -465,6 +496,8 @@
     </div>
     <table class="grid" id="grid"></table>
   </section>
+
+  <section class="sched" id="history" style="margin-top:24px"></section>
 
   <footer>
     <div class="big">A bad week is 25. A perfect week is a trap.</div>
@@ -580,6 +613,49 @@
     for (var i = 0; i < 7; i++) t += dayPoints(ymd(addDays(monday, i)));
     return t;
   }
+  // Consecutive weeks that hit the target (ending this week if already there, else last week).
+  function weekStreak() {
+    var m = new Date(thisMonday);
+    if (weekPoints(m) < TARGET) m = addDays(m, -7);
+    var n = 0, guard = 0;
+    while (weekPoints(m) >= TARGET && guard++ < 520) { n++; m = addDays(m, -7); }
+    return n;
+  }
+  // Lifetime totals for the History view.
+  function lifetimeStats() {
+    var keys = Object.keys(data), total = 0, active = 0, earliest = null;
+    keys.forEach(function (k) {
+      var p = dayPoints(k);
+      total += p;
+      if (p > 0) active++;
+      if (!earliest || k < earliest) earliest = k;
+    });
+    var weeksTarget = 0;
+    if (earliest) {
+      var m = mondayOf(parseKey(earliest)), guard = 0;
+      while (m <= thisMonday && guard++ < 2000) { if (weekPoints(m) >= TARGET) weeksTarget++; m = addDays(m, 7); }
+    }
+    return { total: total, active: active, weeksTarget: weeksTarget };
+  }
+  // Is a given domain's point earned for a day-entry?
+  function domDone(e, domKey) {
+    if (domKey === "health") return healthDone(e);
+    if (domKey === "self") return selfDone(e);
+    return !!e[domKey];
+  }
+  function domName(key) {
+    for (var i = 0; i < DOMAINS.length; i++) if (DOMAINS[i].key === key) return DOMAINS[i].name;
+    return key;
+  }
+  // The single card to nudge next: the one matching the current schedule block if
+  // it's still undone, otherwise the first undone domain.
+  function recommendedDomain() {
+    var e = dayEntry(todayKey);
+    var cur = schedule[currentBlockIndex()];
+    if (cur && cur.dom && !domDone(e, cur.dom)) return cur.dom;
+    for (var i = 0; i < DOMAINS.length; i++) if (!domDone(e, DOMAINS[i].key)) return DOMAINS[i].key;
+    return null; // everything done
+  }
 
   // ---- render: header + cards (always today) ----
   var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -631,6 +707,7 @@
   }
   function renderCards() {
     var e = dayEntry(selectedKey);
+    var recDom = (selectedKey === todayKey) ? recommendedDomain() : null; // "start here" pointer, today only
     cardsEl.innerHTML = "";
     DOMAINS.forEach(function (dom) {
       // Unified layout: every card is a header (domain + status) over a list of
@@ -642,13 +719,15 @@
       var perfect = multi && cnt === rows.length;
       var status = multi ? (perfect ? "Perfect" : (done ? "Done" : (cnt + " / " + rows.length)))
                          : (done ? "Done" : "Not yet");
+      var startHere = (dom.key === recDom);
 
       var card = document.createElement("div");
       card.setAttribute("data-domain", dom.key);
-      card.className = "card subs-card " + dom.key + (done ? " done" : "");
+      card.className = "card subs-card " + dom.key + (done ? " done" : "") + (startHere ? " start" : "");
       card.innerHTML =
         '<div class="card-head">' +
-          '<div class="flex-title"><div class="domain">' + dom.name + '</div></div>' +
+          '<div class="flex-title"><div class="domain">' + dom.name +
+            (startHere ? ' <span class="start-here">start here</span>' : "") + '</div></div>' +
           '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
         '</div>' +
         '<div class="subs">' +
@@ -749,6 +828,7 @@
   // Never allows a future day.
   function setDomain(dayKey, key) {
     if (dayKey > todayKey) return;
+    var before = dayPoints(dayKey);
     var e = dayEntry(dayKey);
     e[key] = !e[key];
     if (HEALTH_SUBS.indexOf(key) !== -1) e.health = healthDone(e); // keep derived point in sync
@@ -756,8 +836,33 @@
     e.updated_at = Date.now();
     data[dayKey] = e;
     save(data);
+    var after = dayPoints(dayKey);
     renderAll();
     pushDay(dayKey); // sync this day if signed in
+    if (dayKey === todayKey && after > before) celebratePoint();
+  }
+
+  // A small, tasteful payoff when a point lands today.
+  var toastEl = null, toastTimer = null;
+  function showToast(msg) {
+    if (!toastEl) { toastEl = document.createElement("div"); toastEl.className = "toast"; document.body.appendChild(toastEl); }
+    toastEl.textContent = msg;
+    void toastEl.offsetWidth; // restart the transition
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2400);
+  }
+  function celebratePoint() {
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+    var bal = balanceOn(todayKey);
+    var msg = "+1 point";
+    if (bal > 0) {
+      var affordable = rewardsCat.filter(function (r) { return (+r.cost || 0) <= bal; });
+      msg += affordable.length
+        ? " · you can afford " + affordable[affordable.length - 1].label
+        : " · " + bal + " to spend";
+    }
+    showToast(msg);
   }
 
   function selectDay(key) {
@@ -797,6 +902,8 @@
     document.getElementById("weekPts").textContent = pts;
     document.getElementById("weekTargetLbl").textContent = TARGET + " target";
     document.getElementById("weekPossLbl").textContent = WEEK_MAX + " possible";
+    var streak = weekStreak();
+    document.getElementById("weekStreak").textContent = streak > 0 ? ("🔥 " + streak + " wk" + (streak === 1 ? "" : "s")) : "";
     var pct = Math.min(100, (pts / WEEK_MAX) * 100);
     document.getElementById("weekFill").style.width = pct + "%";
     document.getElementById("weekGoal").style.left = ((TARGET / WEEK_MAX) * 100) + "%";
@@ -1068,11 +1175,17 @@
     var cur = schedule[idx] || { label: "—", start: "", note: "" };
     var next = schedule.length ? schedule[(idx + 1) % schedule.length] : null;
     var range = cur.start ? (fmt12(cur.start) + (next ? " – " + fmt12(next.start) : "")) : "";
+    // Focus nudge: if this block maps to a domain you haven't logged today, point at it.
+    var focus = "";
+    if (cur.dom && !domDone(dayEntry(todayKey), cur.dom)) {
+      focus = '<div class="now-focus">→ This block is for <b>' + escapeHtml(domName(cur.dom)) + '</b> — log it.</div>';
+    }
     var now = '<div class="sched-now" data-act="toggle">' +
       '<div class="now-main">' +
         '<div class="now-top">Now' + (range ? " · " + escapeHtml(range) : "") + '</div>' +
         '<div class="now-label">' + escapeHtml(cur.label) + '</div>' +
         (cur.note ? '<div class="now-note">' + escapeHtml(cur.note) + '</div>' : "") +
+        focus +
       '</div>' +
       '<span class="chev">▾</span></div>';
     var body = "";
@@ -1173,6 +1286,46 @@
     if (a === "save")  { rewardsCat = readRewardEdits(); saveRewardsCat(rewardsCat); rewardsEditing = false; renderRewards(); return; }
   });
 
+  // ======================= History (the compounding view) =======================
+  var historyOpen = false;
+  function renderHistory() {
+    var host = document.getElementById("history");
+    host.className = "sched" + (historyOpen ? " open" : "");
+    var stats = lifetimeStats();
+    var now = '<div class="sched-now" data-hact="toggle">' +
+      '<span class="rew-emoji">📈</span>' +
+      '<span class="lbl">History</span>' +
+      '<span class="hist-sum">' + stats.weeksTarget + ' wk' + (stats.weeksTarget === 1 ? "" : "s") + ' on target</span>' +
+      '<span class="chev">▾</span></div>';
+    var body = "";
+    if (historyOpen) {
+      var N = 10, cols = "", labels = "";
+      for (var i = N - 1; i >= 0; i--) {
+        var mon = addDays(thisMonday, -i * 7);
+        var wp = weekPoints(mon);
+        var pct = Math.max(2, Math.round(wp / WEEK_MAX * 100));
+        cols += '<div class="hist-col' + (i === 0 ? " cur" : "") + '"><div class="hist-bar' + (wp >= TARGET ? " hit" : "") +
+          '" style="height:' + pct + '%" title="' + wp + ' pts"></div></div>';
+        labels += '<div class="hist-lbl">' + (mon.getMonth() + 1) + "/" + mon.getDate() + '</div>';
+      }
+      var tp = Math.round(TARGET / WEEK_MAX * 100);
+      body = '<div class="sched-body">' +
+        '<div class="hist-stats">' +
+          '<span><b>' + stats.total + '</b>points</span>' +
+          '<span><b>' + stats.active + '</b>active days</span>' +
+          '<span><b>' + stats.weeksTarget + '</b>weeks on target</span>' +
+        '</div>' +
+        '<div class="hist-plot"><div class="hist-goal" style="bottom:' + tp + '%"></div>' + cols + '</div>' +
+        '<div class="hist-labels">' + labels + '</div>' +
+        '<div class="hist-cap">Last ' + N + ' weeks · dashed line = ' + TARGET + ' target</div>' +
+      '</div>';
+    }
+    host.innerHTML = now + body;
+  }
+  document.getElementById("history").addEventListener("click", function (ev) {
+    if (ev.target.closest && ev.target.closest("[data-hact]")) { historyOpen = !historyOpen; renderHistory(); }
+  });
+
   function renderAll() {
     renderDaySwitch();
     if (!noteInputFocused()) renderCards(); // don't steal focus while a note is being typed
@@ -1181,6 +1334,7 @@
     renderGrid();
     if (!schedEditing) renderSchedule();
     if (!rewardsEditing) renderRewards();
+    renderHistory();
   }
 
   // Schedule interactions (delegated on the stable container).
