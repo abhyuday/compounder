@@ -232,7 +232,7 @@
   .status.perfect { color: var(--accent) !important; }
   .subs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   .sub {
-    display: flex; align-items: center; gap: 11px; cursor: pointer; padding: 9px 11px;
+    display: flex; align-items: flex-start; gap: 11px; cursor: pointer; padding: 9px 11px;
     border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border);
     transition: border-color .15s ease, background .15s ease;
   }
@@ -241,6 +241,7 @@
   .subcheck {
     flex: 0 0 auto; width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--border);
     background: var(--panel); display: grid; place-items: center; transition: all .15s ease;
+    margin-top: -2px; /* optically center on the header word (Hard Work, Build, …) */
   }
   .sub.on .subcheck { background: var(--done); border-color: var(--done); }
   .subcheck svg { width: 13px; height: 13px; stroke: #0e1116; stroke-width: 3.2; fill: none; opacity: 0; transform: scale(.6); transition: all .15s ease; }
