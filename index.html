@@ -194,6 +194,14 @@
     font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; margin: 14px 0;
   }
   .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+  .pill-av { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+  .profile { display: flex; align-items: center; gap: 13px; }
+  .who-av { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+  .who-av.ph { display: grid; place-items: center; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); font-weight: 700; font-size: 18px; }
+  .who-meta { min-width: 0; }
+  .who-name { font-size: 15px; font-weight: 600; color: var(--text); }
+  .who-email { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -266,12 +274,23 @@
     { key: "self",   name: "Self",   move: "30 minutes with zero ROI — a film, a book, a walk.", scored: "Happened / didn't" }
   ];
 
-  // ---- storage ----
-  function load() {
-    try { return JSON.parse(localStorage.getItem(STORE)) || {}; }
+  // ---- storage (scoped per account, so different users don't mix) ----
+  var ANON_KEY = STORE;                 // board used when signed out
+  var MIGRATED_KEY = "compounder.migratedTo";
+  function storeKey() { return session ? ("compounder.u." + session.user.id) : ANON_KEY; }
+  function loadKey(k) {
+    try { return JSON.parse(localStorage.getItem(k)) || {}; }
     catch (e) { return {}; }
   }
-  function save(d) { localStorage.setItem(STORE, JSON.stringify(d)); }
+  function normalize(d) {
+    Object.keys(d).forEach(function (day) {
+      var e = d[day];
+      if (e && typeof e.updated_at !== "number") e.updated_at = hasData(e) ? Date.now() : 0;
+    });
+    return d;
+  }
+  function load() { return normalize(loadKey(storeKey())); }
+  function save(d) { localStorage.setItem(storeKey(), JSON.stringify(d)); }
   var data = load();
 
   // ---- date helpers (local time) ----
@@ -459,9 +478,23 @@
   var syncTextEl = document.getElementById("syncText");
   var panelEl = document.getElementById("authPanel");
 
+  function meta() { return (session && session.user && session.user.user_metadata) || {}; }
+  function userName() { var m = meta(); return m.full_name || m.name || (session && session.user.email) || "Signed in"; }
+  function firstName() { return userName().split(" ")[0].split("@")[0]; }
+  function userAvatar() { var m = meta(); return m.avatar_url || m.picture || ""; }
+
   function setPill(state, text) {
     pillEl.className = "pill" + (state ? " " + state : "");
-    syncTextEl.textContent = text;
+    pillEl.title = text || "";
+    if (session) {
+      var av = userAvatar();
+      pillEl.innerHTML =
+        '<span class="st"></span>' +
+        (av ? '<img class="pill-av" src="' + escapeHtml(av) + '" referrerpolicy="no-referrer" alt="">' : "") +
+        '<span>' + escapeHtml(firstName()) + "</span>";
+    } else {
+      pillEl.innerHTML = '<span class="st"></span><span>' + escapeHtml(text || "Sync across devices") + "</span>";
+    }
   }
 
   // Toggle the auth panel open/closed when the pill is clicked.
@@ -483,20 +516,33 @@
     if (!sb) return;
     var redirect = location.origin + location.pathname;
     setPill("busy", "Redirecting…");
-    sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: redirect } })
+    sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: redirect, queryParams: { prompt: "select_account" } } })
       .then(function (res) { if (res.error) authMsg(res.error.message, "bad"); })
       .catch(function (err) { authMsg(String(err && err.message || err), "bad"); });
   }
 
   function renderAuthPanel() {
     if (session) {
+      var av = userAvatar();
+      var name = escapeHtml(userName());
+      var email = escapeHtml(session.user.email || "");
       panelEl.innerHTML =
-        '<div class="auth-row" style="justify-content:space-between;align-items:center">' +
-          '<span class="auth-who">Signed in as <b>' + escapeHtml(session.user.email) + '</b></span>' +
-          '<button class="btn ghost" id="signOutBtn">Sign out</button>' +
+        '<div class="profile">' +
+          (av
+            ? '<img class="who-av" src="' + escapeHtml(av) + '" referrerpolicy="no-referrer" alt="">'
+            : '<div class="who-av ph">' + escapeHtml((userName()[0] || "?").toUpperCase()) + '</div>') +
+          '<div class="who-meta">' +
+            '<div class="who-name">' + name + '</div>' +
+            (email && email !== name ? '<div class="who-email">' + email + '</div>' : "") +
+          '</div>' +
         '</div>' +
-        '<div class="auth-msg ok" id="authMsg">Your four-a-day syncs to every device you sign in on.</div>';
-      document.getElementById("signOutBtn").addEventListener("click", doSignOut);
+        '<div class="auth-msg ok" id="authMsg">Synced to your account on every device you sign in on.</div>' +
+        '<div class="auth-row" style="margin-top:14px">' +
+          '<button class="btn ghost" id="switchBtn">Switch account</button>' +
+          '<button class="btn ghost" id="signOutBtn">Sign out</button>' +
+        '</div>';
+      document.getElementById("signOutBtn").addEventListener("click", function () { doSignOut(false); });
+      document.getElementById("switchBtn").addEventListener("click", switchAccount);
     } else {
       panelEl.innerHTML =
         '<h3>Sync across devices</h3>' +
@@ -536,13 +582,17 @@
       .catch(function (err) { btn.disabled = false; authMsg(String(err && err.message || err), "bad"); });
   }
 
-  function doSignOut() {
+  function doSignOut(keepPanelOpen) {
     if (!sb) return;
     sb.auth.signOut().then(function () {
-      panelEl.classList.remove("open");
-      // local data stays on this device so the app still works offline
+      // onAuth(null) fires and reloads the (empty) signed-out board.
+      if (keepPanelOpen) { panelEl.classList.add("open"); renderAuthPanel(); }
+      else panelEl.classList.remove("open");
     });
   }
+
+  // Sign out and immediately reopen the login panel to log in as someone else.
+  function switchAccount() { doSignOut(true); }
 
   // ---- sync engine (last-write-wins per day) ----
   function entryFromRow(r) {
@@ -614,13 +664,34 @@
       .catch(function () { syncing = false; setPill("err", "Offline"); });
   }
 
+  // One-time: when the very first account signs in on this device, adopt the
+  // pre-account (signed-out) board into it, then retire the anon copy so it can
+  // never leak into a different account later.
+  function claimAnonBoard() {
+    if (localStorage.getItem(MIGRATED_KEY)) return;
+    var anon = normalize(loadKey(ANON_KEY));
+    var moved = false;
+    Object.keys(anon).forEach(function (d) {
+      if (!hasData(anon[d])) return;
+      var cur = data[d];
+      if (!cur || (anon[d].updated_at || 0) > (cur.updated_at || 0)) { data[d] = anon[d]; moved = true; }
+    });
+    localStorage.setItem(MIGRATED_KEY, session.user.id);
+    localStorage.removeItem(ANON_KEY);
+    if (moved) save(data);
+  }
+
   function onAuth(newSession) {
     session = newSession || null;
+    data = load(); // reload the board for the now-current scope (this user, or anon)
     if (session) {
+      claimAnonBoard();
       setPill("busy", "Syncing…");
+      renderAll();
       sync();
     } else {
       setPill("", "Sync across devices");
+      renderAll();
     }
     if (panelEl.classList.contains("open")) renderAuthPanel();
   }
@@ -630,20 +701,6 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
-
-  // Normalize any legacy entries (pre-sync) so they carry a timestamp and
-  // will be pushed up on first sign-in.
-  (function migrateLocal() {
-    var changed = false;
-    Object.keys(data).forEach(function (d) {
-      var e = data[d];
-      if (e && typeof e.updated_at !== "number") {
-        e.updated_at = hasData(e) ? Date.now() : 0;
-        changed = true;
-      }
-    });
-    if (changed) save(data);
-  })();
 
   if (sb) {
     sb.auth.getSession().then(function (res) { onAuth(res.data && res.data.session); });
