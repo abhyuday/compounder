@@ -237,8 +237,11 @@
 
   /* Per-item notes (non-intrusive) */
   .notewrap { margin-top: 5px; }
-  .note-add { background: none; border: none; color: var(--faint); font-size: 11.5px; cursor: pointer; padding: 1px 0; }
+  .note-item { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .note-add { display: block; background: none; border: none; color: var(--faint); font-size: 11.5px; cursor: pointer; padding: 1px 0; }
   .note-add:hover { color: var(--muted); }
+  .note-del { background: none; border: none; color: var(--faint); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 3px; flex: 0 0 auto; }
+  .note-del:hover { color: #db6d6d; }
   .note-line { font-size: 12px; color: var(--muted); font-style: italic; cursor: text; }
   .note-line::before { content: "\201C"; }
   .note-line::after { content: "\201D"; }
@@ -494,18 +497,33 @@
   var cardsEl = document.getElementById("cards");
   var checkSVG = '<svg viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-  // A non-intrusive per-item note: "+ note" when empty, a quiet italic line when
-  // set, an inline input while editing. Bind via data-attrs; handled by delegation.
+  // Notes are a list per checkpoint. Legacy single-string notes are read as a
+  // one-item list. Each note: a quiet line (with a × to delete) or an inline
+  // input while editing; a "+ note" appends another. Bound by data-attrs, id = "key:index".
+  function notesArr(e, key) {
+    var v = e.notes && e.notes[key];
+    if (v == null) return [];
+    return Array.isArray(v) ? v.slice() : [String(v)];
+  }
+  function writeNotes(e, key, arr) {
+    e.notes = e.notes || {};
+    if (arr.length) e.notes[key] = arr; else delete e.notes[key];
+  }
   function noteZone(key, e) {
-    var val = (e.notes && e.notes[key]) ? String(e.notes[key]) : "";
-    if (noteEditing === key) {
-      return '<div class="notewrap"><input class="note-input" data-noteinput="' + key +
-        '" value="' + escapeHtml(val) + '" placeholder="What did you do?" /></div>';
-    }
-    if (val.trim()) {
-      return '<div class="notewrap"><span class="note-line" data-note="' + key + '">' + escapeHtml(val) + '</span></div>';
-    }
-    return '<div class="notewrap"><button class="note-add" data-note="' + key + '">+ note</button></div>';
+    var arr = notesArr(e, key);
+    var html = '<div class="notewrap">';
+    arr.forEach(function (txt, i) {
+      var id = key + ":" + i;
+      if (noteEditing === id) {
+        html += '<div class="note-item"><input class="note-input" data-noteinput="' + id +
+          '" value="' + escapeHtml(txt) + '" placeholder="What did you do?" /></div>';
+      } else if (String(txt).trim()) {
+        html += '<div class="note-item"><span class="note-line" data-note="' + id + '">' + escapeHtml(txt) + '</span>' +
+          '<button class="note-del" data-notedel="' + id + '" title="Remove">×</button></div>';
+      }
+    });
+    html += '<button class="note-add" data-noteadd="' + key + '">+ note</button></div>';
+    return html;
   }
 
   function noteInputFocused() {
@@ -555,35 +573,65 @@
     });
   }
 
-  // Note editing state + interactions (delegated on the stable #cards container).
+  // Note editing state + interactions. id = "key:index". Handlers are shared by
+  // the cards (#cards) and the bookend (#bookend).
   var noteEditing = null;
-  function openNote(key) {
-    noteEditing = key;
-    renderCards();
-    var inp = cardsEl.querySelector('[data-noteinput="' + key + '"]');
+  function renderNotes() { renderCards(); renderBookend(); }
+  function openNoteId(id) {
+    noteEditing = id;
+    renderNotes();
+    var inp = document.querySelector('[data-noteinput="' + id + '"]');
     if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
-  cardsEl.addEventListener("click", function (ev) {
-    var o = ev.target.closest && ev.target.closest("[data-note]");
-    if (o) { ev.stopPropagation(); openNote(o.getAttribute("data-note")); }
-  });
-  cardsEl.addEventListener("input", function (ev) {
-    var inp = ev.target.closest && ev.target.closest("[data-noteinput]"); if (!inp) return;
-    var key = inp.getAttribute("data-noteinput");
-    var en = dayEntry(selectedKey); en.notes = en.notes || {}; en.notes[key] = inp.value;
-    en.updated_at = Date.now(); data[selectedKey] = en; save(data);
-  });
-  cardsEl.addEventListener("focusout", function (ev) {
-    if (!(ev.target.closest && ev.target.closest("[data-noteinput]"))) return;
-    pushDay(selectedKey);
-    // Defer the close so we don't tear down the input during its own blur. If
-    // another note was opened in the meantime, leave that one open.
-    var closingKey = noteEditing;
-    setTimeout(function () { if (noteEditing === closingKey) { noteEditing = null; renderCards(); } }, 0);
-  });
-  cardsEl.addEventListener("keydown", function (ev) {
-    if (ev.key === "Enter" && ev.target.closest && ev.target.closest("[data-noteinput]")) ev.target.blur();
-  });
+  function noteAdd(key) {
+    var e = dayEntry(selectedKey); var arr = notesArr(e, key); arr.push(""); writeNotes(e, key, arr);
+    e.updated_at = Date.now(); data[selectedKey] = e; save(data);
+    openNoteId(key + ":" + (arr.length - 1));
+  }
+  function noteDelete(id) {
+    var p = id.split(":"), key = p[0];
+    var e = dayEntry(selectedKey); var arr = notesArr(e, key); arr.splice(+p[1], 1); writeNotes(e, key, arr);
+    e.updated_at = Date.now(); data[selectedKey] = e; save(data); pushDay(selectedKey);
+    if (noteEditing && noteEditing.split(":")[0] === key) noteEditing = null;
+    renderNotes();
+  }
+  function noteHandleClick(ev) {
+    var t = ev.target;
+    var add = t.closest && t.closest("[data-noteadd]");
+    if (add) { ev.stopPropagation(); noteAdd(add.getAttribute("data-noteadd")); return true; }
+    var del = t.closest && t.closest("[data-notedel]");
+    if (del) { ev.stopPropagation(); noteDelete(del.getAttribute("data-notedel")); return true; }
+    var open = t.closest && t.closest("[data-note]");
+    if (open) { ev.stopPropagation(); openNoteId(open.getAttribute("data-note")); return true; }
+    return false;
+  }
+  function bindNotes(cont) {
+    cont.addEventListener("input", function (ev) {
+      var inp = ev.target.closest && ev.target.closest("[data-noteinput]"); if (!inp) return;
+      var p = inp.getAttribute("data-noteinput").split(":"), key = p[0];
+      var e = dayEntry(selectedKey); var arr = notesArr(e, key); arr[+p[1]] = inp.value; writeNotes(e, key, arr);
+      e.updated_at = Date.now(); data[selectedKey] = e; save(data);
+    });
+    cont.addEventListener("focusout", function (ev) {
+      var inp = ev.target.closest && ev.target.closest("[data-noteinput]"); if (!inp) return;
+      pushDay(selectedKey);
+      var closingId = inp.getAttribute("data-noteinput");
+      // Defer so we don't tear down the input mid-blur; skip if another note opened.
+      setTimeout(function () {
+        if (noteEditing !== closingId) return;
+        var key = closingId.split(":")[0];
+        var e = dayEntry(selectedKey);
+        var arr = notesArr(e, key).filter(function (x) { return String(x).trim(); }); // drop blanks
+        writeNotes(e, key, arr); e.updated_at = Date.now(); data[selectedKey] = e; save(data);
+        noteEditing = null; renderNotes();
+      }, 0);
+    });
+    cont.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && ev.target.closest && ev.target.closest("[data-noteinput]")) ev.target.blur();
+    });
+  }
+  cardsEl.addEventListener("click", function (ev) { noteHandleClick(ev); });
+  bindNotes(cardsEl);
 
   // Toggle one field on a given day. Handles simple domains and Health sub-flags.
   // Never allows a future day.
@@ -905,31 +953,9 @@
   });
   function loadDefaultSched() { return DEFAULT_SCHED.map(function (b) { return { start: b.start, label: b.label, note: b.note, dom: b.dom }; }); }
 
-  // Bookend interactions: update live on input (no rebuild → keeps focus), sync on blur.
-  document.getElementById("bookend").addEventListener("input", function (ev) {
-    var t = ev.target; if (t.tagName !== "TEXTAREA") return;
-    var e = dayEntry(selectedKey);
-    e[t.getAttribute("data-field")] = t.value;
-    e.updated_at = Date.now();
-    data[selectedKey] = e;
-    save(data);
-    var dot = t.parentNode.querySelector(".qdot"); if (dot) dot.classList.toggle("on", !!t.value.trim());
-    autosize(t);
-    updateBookendMeta();
-  });
-  document.getElementById("bookend").addEventListener("focusout", function (ev) {
-    if (ev.target.tagName === "TEXTAREA") pushDay(selectedKey);
-  });
-  // The hard-thing yes/no toggle + its note.
-  function openBookendNote(key) {
-    noteEditing = key;
-    renderBookend();
-    var inp = document.getElementById("bookend").querySelector('[data-noteinput="' + key + '"]');
-    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
-  }
+  // Bookend: the hard-thing toggle plus its notes (notes use the shared handlers).
   document.getElementById("bookend").addEventListener("click", function (ev) {
-    var noteBtn = ev.target.closest && ev.target.closest("[data-note]");
-    if (noteBtn) { openBookendNote(noteBtn.getAttribute("data-note")); return; }
+    if (noteHandleClick(ev)) return; // note add/edit/delete
     if (ev.target.closest && ev.target.closest("[data-hard]")) {
       var e = dayEntry(selectedKey);
       e.hard = !e.hard; e.updated_at = Date.now();
@@ -937,20 +963,7 @@
       renderBookend();
     }
   });
-  document.getElementById("bookend").addEventListener("input", function (ev) {
-    var inp = ev.target.closest && ev.target.closest("[data-noteinput]"); if (!inp) return;
-    var en = dayEntry(selectedKey); en.notes = en.notes || {}; en.notes[inp.getAttribute("data-noteinput")] = inp.value;
-    en.updated_at = Date.now(); data[selectedKey] = en; save(data);
-  });
-  document.getElementById("bookend").addEventListener("focusout", function (ev) {
-    if (!(ev.target.closest && ev.target.closest("[data-noteinput]"))) return;
-    pushDay(selectedKey);
-    var closingKey = noteEditing;
-    setTimeout(function () { if (noteEditing === closingKey) { noteEditing = null; renderBookend(); } }, 0);
-  });
-  document.getElementById("bookend").addEventListener("keydown", function (ev) {
-    if (ev.key === "Enter" && ev.target.closest && ev.target.closest("[data-noteinput]")) ev.target.blur();
-  });
+  bindNotes(document.getElementById("bookend"));
 
   // Keep the "Now" block and bookend phase current through the day.
   setInterval(function () { if (!schedEditing) renderSchedule(); renderBookend(); }, 60000);
@@ -1147,7 +1160,12 @@
     };
   }
   function hasNotes(e) {
-    return !!(e && e.notes && Object.keys(e.notes).some(function (k) { return e.notes[k] && String(e.notes[k]).trim(); }));
+    if (!e || !e.notes) return false;
+    return Object.keys(e.notes).some(function (k) {
+      var v = e.notes[k];
+      if (Array.isArray(v)) return v.some(function (x) { return x && String(x).trim(); });
+      return v && String(v).trim();
+    });
   }
   function hasData(e) {
     return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.family || e.vind || e.vsin || e.vtrq || e.vrest ||
