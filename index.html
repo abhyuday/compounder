@@ -653,8 +653,9 @@
     range.textContent += "  ·  " + wp + " pts" + (wp >= TARGET ? " ✓" : "");
   }
 
-  // ======================= Schedule (device-local, editable) =======================
-  var SCHED_KEY = "compounder.schedule";
+  // ======================= Schedule (editable, synced per account) =======================
+  var SCHED_KEY = "compounder.schedule";        // signed-out / pre-sync copy
+  var SCHED_CLAIMED = "compounder.schedule.claimed";
   var DEFAULT_SCHED = [
     { start: "06:00", label: "The Morning",     note: "Rise, hydrate, move or read. Review the calendar, set your intentions.", dom: "health" },
     { start: "07:30", label: "Morning question", note: "“What good shall I do this day?”", dom: "self" },
@@ -668,15 +669,63 @@
     { start: "22:00", label: "Sleep",            note: "Wind down, screens off, a full 8 hours.", dom: "health" }
   ];
   var schedOpen = false, schedEditing = false;
-  function loadSched() {
-    try { var s = JSON.parse(localStorage.getItem(SCHED_KEY)); if (s && s.length) return s; } catch (e) {}
-    return DEFAULT_SCHED.map(function (b) { return { start: b.start, label: b.label, note: b.note, dom: b.dom }; });
+  function defaultBlocks() { return DEFAULT_SCHED.map(function (b) { return { start: b.start, label: b.label, note: b.note, dom: b.dom }; }); }
+  function schedKey() { return session ? ("compounder.schedule." + session.user.id) : SCHED_KEY; }
+  var schedule = defaultBlocks();
+  var schedTs = 0; // last local edit time (ms) for last-write-wins sync
+  function loadSchedule() {
+    var k = schedKey();
+    try { var a = JSON.parse(localStorage.getItem(k)); if (a && a.length) { schedule = a; schedTs = (+localStorage.getItem(k + ".ts")) || 0; return; } } catch (e) {}
+    schedule = defaultBlocks(); schedTs = 0;
   }
-  function saveSched(s) { localStorage.setItem(SCHED_KEY, JSON.stringify(s)); }
-  var schedule = loadSched();
+  function persistSchedule() {
+    var k = schedKey();
+    localStorage.setItem(k, JSON.stringify(schedule));
+    localStorage.setItem(k + ".ts", String(schedTs));
+  }
+  // Called when the user edits/saves/resets the schedule.
+  function saveSched(s) { schedule = s; schedTs = Date.now(); sortSched(); persistSchedule(); pushSchedule(); }
+  function pushSchedule() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert(
+      { user_id: session.user.id, schedule: schedule, updated_at: new Date(schedTs || Date.now()).toISOString() },
+      { onConflict: "user_id" }
+    ).then(function () {}, function () {});
+  }
+  function syncSchedule() {
+    if (!sb || !session) return;
+    sb.from("user_settings").select("schedule,updated_at").eq("user_id", session.user.id).maybeSingle()
+      .then(function (res) {
+        if (res.error) return;
+        var r = res.data;
+        var rts = (r && r.updated_at) ? Date.parse(r.updated_at) : 0;
+        if (r && r.schedule && r.schedule.length && rts > schedTs) {
+          schedule = r.schedule; schedTs = rts; sortSched(); persistSchedule();
+          if (!schedEditing) renderSchedule();
+        } else if (schedTs > rts) {
+          pushSchedule();
+        }
+      }, function () {});
+  }
+  // On sign-in: load this account's schedule; the first account on a device
+  // claims the pre-sync (signed-out) schedule; then reconcile with the server.
+  function onAuthSchedule() {
+    loadSchedule();
+    if (session) {
+      if (schedTs === 0 && !localStorage.getItem(SCHED_CLAIMED)) {
+        try {
+          var gb = JSON.parse(localStorage.getItem(SCHED_KEY));
+          if (gb && gb.length) { schedule = gb; schedTs = (+localStorage.getItem(SCHED_KEY + ".ts")) || Date.now(); persistSchedule(); }
+        } catch (e) {}
+        localStorage.setItem(SCHED_CLAIMED, session.user.id);
+      }
+      syncSchedule();
+    }
+    if (!schedEditing) renderSchedule();
+  }
   function toMin(hhmm) { var p = String(hhmm).split(":"); return (+p[0]) * 60 + (+p[1] || 0); }
   function sortSched() { schedule.sort(function (a, b) { return toMin(a.start) - toMin(b.start); }); }
-  sortSched();
+  loadSchedule(); sortSched();
   function fmt12(hhmm) {
     var p = String(hhmm).split(":"); var H = +p[0], M = p[1] || "00";
     var ap = H < 12 ? "AM" : "PM"; var h = H % 12; if (h === 0) h = 12;
@@ -852,10 +901,10 @@
   window.addEventListener("focus", function () {
     var nk = ymd(new Date());
     if (nk !== todayKey) { location.reload(); return; }
-    if (session) sync(); // pull any changes made on other devices
+    if (session) { sync(); syncSchedule(); } // pull any changes made on other devices
   });
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden && session) sync();
+    if (!document.hidden && session) { sync(); syncSchedule(); }
   });
 
   // ======================= Supabase auth + sync =======================
@@ -1087,6 +1136,7 @@
   function onAuth(newSession) {
     session = newSession || null;
     data = load(); // reload the board for the now-current scope (this user, or anon)
+    onAuthSchedule(); // reload + reconcile the schedule for this account
     if (session) {
       claimAnonBoard();
       setPill("busy", "Syncing…");
