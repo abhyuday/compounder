@@ -307,7 +307,7 @@
 
   <footer>
     <div class="big">A bad week is 20. A perfect week is a trap.</div>
-    <div>Progress is saved on this device only.</div>
+    <div>Signed in, your board syncs across every device.</div>
   </footer>
 </div>
 
@@ -325,14 +325,14 @@
   var sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_ANON) : null;
 
   var DOMAINS = [
-    { key: "money",  name: "Money",  move: "One 15-min deliberate action — fund the Roth, write one thesis paragraph, one advisory outreach, one position reconciled. Checking your P&L does not count.", scored: "Done / not" },
-    { key: "health", name: "Health", scored: "2 of 3 counts", subs: [
-      { key: "hmove",  name: "Move",  hint: "Zone 2, a lift, or 8K steps" },
-      { key: "heat",   name: "Eat",   hint: "One clean choice — protein in, junk out" },
-      { key: "hsleep", name: "Sleep", hint: "Lights-out by your target time" }
+    { key: "money",  name: "Money",  move: "One 15-minute move that compounds — fund the account, write a page of the thesis, one real outreach, one position reconciled. Watching the market doesn't count.", scored: "Moved / didn't" },
+    { key: "health", name: "Health", scored: "2 of 3 — win on a bad day", subs: [
+      { key: "hmove",  name: "Move",  hint: "Zone 2, a lift, or 8K steps. On purpose." },
+      { key: "heat",   name: "Eat",   hint: "Protein first. Nothing you'd hide." },
+      { key: "hsleep", name: "Sleep", hint: "Screens down, lights-out by your target." }
     ] },
-    { key: "family", name: "Family", move: "One defended block with a specific person, phone in another room.", scored: "Block happened / didn't" },
-    { key: "self",   name: "Self",   move: "30 minutes with zero ROI — a film, a book, a walk.", scored: "Happened / didn't" }
+    { key: "family", name: "Family", move: "One undistracted block with one specific person. Phone in another room — not face-down. Presence they can feel.", scored: "Present / absent" },
+    { key: "self",   name: "Self",   move: "30 minutes of chosen nothing — a book, a walk, an instrument. Not the feed. Zero ROI is the point.", scored: "Refilled / didn't" }
   ];
   var HEALTH_SUBS = ["hmove", "heat", "hsleep"];
   function healthCount(e) { return HEALTH_SUBS.reduce(function (n, k) { return n + (e && e[k] ? 1 : 0); }, 0); }
