@@ -68,6 +68,49 @@
   .week-foot { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 18px; }
   .week-foot b { color: var(--text); }
 
+  /* Schedule strip */
+  .sched { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 18px; box-shadow: var(--shadow); overflow: hidden; }
+  .sched-now { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; }
+  .sched-now .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .sched-now .lbl { font-size: 13.5px; color: var(--text); font-weight: 600; }
+  .sched-now .time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sched-now .chev { margin-left: auto; color: var(--faint); font-size: 11px; transition: transform .2s ease; }
+  .sched.open .sched-now .chev { transform: rotate(180deg); }
+  .sched-body { border-top: 1px solid var(--border); padding: 6px; }
+  .blk { display: flex; align-items: flex-start; gap: 11px; padding: 9px 10px; border-radius: 9px; }
+  .blk.now { background: var(--panel-2); }
+  .blk.past { opacity: .42; }
+  .blk .bt { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; width: 66px; flex: 0 0 auto; padding-top: 2px; }
+  .blk .bdot { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex: 0 0 auto; background: var(--faint); }
+  .blk .bmain { min-width: 0; }
+  .blk .blabel { display: block; font-size: 13.5px; color: var(--text); font-weight: 600; }
+  .blk .bnote { display: block; font-size: 12px; color: var(--muted); }
+  .sched-actions { display: flex; gap: 14px; padding: 8px 12px 6px; }
+  .sched-actions .lnk { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; padding: 0; }
+  .sched-actions .lnk.muted { color: var(--muted); }
+  .blk.edit { align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sched input { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 6px 8px; font-size: 12.5px; outline: none; }
+  .sched input:focus { border-color: var(--accent); }
+  .blk.edit input[type=time] { width: 108px; flex: 0 0 auto; }
+  .blk.edit .blabel-in { width: 118px; flex: 0 0 auto; }
+  .blk.edit .bnote-in { flex: 1; min-width: 120px; }
+  .blk .del { background: none; border: none; color: #db6d6d; cursor: pointer; font-size: 13px; flex: 0 0 auto; }
+
+  /* Bookend ritual */
+  .bookend { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 20px; box-shadow: var(--shadow); }
+  .bookend-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 11px; }
+  .bookend-top .ttl { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
+  .bookend-streak { font-size: 12px; color: var(--accent); }
+  .be-row { margin-bottom: 11px; }
+  .be-row:last-child { margin-bottom: 0; }
+  .be-row.dim { opacity: .55; }
+  .be-q { font-size: 13.5px; color: var(--text); font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .be-q .qdot { width: 8px; height: 8px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--border); flex: 0 0 auto; }
+  .be-q .qdot.on { background: var(--done); border-color: var(--done); box-shadow: 0 0 8px rgba(63,185,80,.5); }
+  .be-recall { font-size: 12px; color: var(--muted); font-style: italic; margin: 0 0 6px 16px; }
+  .bookend textarea { width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 11px; font-size: 14px; font-family: inherit; line-height: 1.4; resize: none; overflow: hidden; outline: none; }
+  .bookend textarea:focus { border-color: var(--accent); }
+
   /* Day switcher */
   .dayswitch { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
   .daynav {
@@ -269,6 +312,8 @@
 
   <section class="auth-panel" id="authPanel"></section>
 
+  <section class="sched" id="sched"></section>
+
   <section class="week">
     <div class="week-top">
       <span class="week-label" id="weekLabel">This week</span>
@@ -280,6 +325,8 @@
     </div>
     <div class="week-foot" id="weekFoot"></div>
   </section>
+
+  <section class="bookend" id="bookend"></section>
 
   <div class="dayswitch">
     <button class="daynav" id="dayPrev" aria-label="Previous day">◀</button>
@@ -405,7 +452,8 @@
 
   function dayEntry(key) {
     return data[key] || { money: false, hmove: false, heat: false, hsleep: false, health: false,
-      family: false, vind: false, vsin: false, vtrq: false, vrest: false, self: false };
+      family: false, vind: false, vsin: false, vtrq: false, vrest: false, self: false,
+      am_intent: "", pm_review: "" };
   }
   function dayPoints(key) {
     var e = data[key]; if (!e) return 0;
@@ -605,13 +653,171 @@
     range.textContent += "  ·  " + wp + " pts" + (wp >= TARGET ? " ✓" : "");
   }
 
+  // ======================= Schedule (device-local, editable) =======================
+  var SCHED_KEY = "compounder.schedule";
+  var DEFAULT_SCHED = [
+    { start: "06:00", label: "The Morning",     note: "Rise, hydrate, move or read. Review the calendar, set your intentions.", dom: "health" },
+    { start: "07:30", label: "Morning question", note: "“What good shall I do this day?”", dom: "self" },
+    { start: "08:00", label: "Commute / Prep",   note: "Educational podcast, commute, clear your personal inbox.", dom: "" },
+    { start: "09:00", label: "Deep Work",        note: "Your hardest creative work. High-priority projects. Minimize distractions.", dom: "self" },
+    { start: "12:00", label: "Midday Break",     note: "Step away, eat, walk, and completely unplug.", dom: "health" },
+    { start: "13:00", label: "Work Block 2",     note: "Meetings, collaboration, admin, email.", dom: "" },
+    { start: "17:00", label: "The Transition",   note: "Put things in their places — 15-min tidy of desk & files. Commute home.", dom: "self" },
+    { start: "18:00", label: "The Evening",      note: "Dinner with people. Hobbies. Relax. Switch off from work.", dom: "family" },
+    { start: "21:30", label: "Evening question", note: "“What good have I done today?”", dom: "self" },
+    { start: "22:00", label: "Sleep",            note: "Wind down, screens off, a full 8 hours.", dom: "health" }
+  ];
+  var schedOpen = false, schedEditing = false;
+  function loadSched() {
+    try { var s = JSON.parse(localStorage.getItem(SCHED_KEY)); if (s && s.length) return s; } catch (e) {}
+    return DEFAULT_SCHED.map(function (b) { return { start: b.start, label: b.label, note: b.note, dom: b.dom }; });
+  }
+  function saveSched(s) { localStorage.setItem(SCHED_KEY, JSON.stringify(s)); }
+  var schedule = loadSched();
+  function toMin(hhmm) { var p = String(hhmm).split(":"); return (+p[0]) * 60 + (+p[1] || 0); }
+  function sortSched() { schedule.sort(function (a, b) { return toMin(a.start) - toMin(b.start); }); }
+  sortSched();
+  function fmt12(hhmm) {
+    var p = String(hhmm).split(":"); var H = +p[0], M = p[1] || "00";
+    var ap = H < 12 ? "AM" : "PM"; var h = H % 12; if (h === 0) h = 12;
+    return h + ":" + M + " " + ap;
+  }
+  function domColor(d) {
+    return ({ money: "#58a6ff", health: "#3fb950", family: "#db6d9c", self: "#a371f7" })[d] || "var(--faint)";
+  }
+  function currentBlockIndex() {
+    var m = new Date().getHours() * 60 + new Date().getMinutes();
+    for (var i = schedule.length - 1; i >= 0; i--) { if (m >= toMin(schedule[i].start)) return i; }
+    return schedule.length - 1; // before the first block (early AM) → the overnight block
+  }
+  function readEdits() {
+    var rows = document.querySelectorAll("#sched .blk.edit");
+    return Array.prototype.map.call(rows, function (r) {
+      return {
+        start: r.querySelector("input[type=time]").value || "00:00",
+        label: (r.querySelector(".blabel-in").value || "").trim() || "Block",
+        note: (r.querySelector(".bnote-in").value || "").trim(),
+        dom: r.getAttribute("data-dom") || ""
+      };
+    });
+  }
+  function renderSchedule() {
+    var host = document.getElementById("sched");
+    host.className = "sched" + (schedOpen ? " open" : "");
+    var idx = currentBlockIndex();
+    var cur = schedule[idx] || { label: "—", start: "", dom: "" };
+    var now = '<div class="sched-now" data-act="toggle">' +
+      '<span class="dot" style="background:' + domColor(cur.dom) + '"></span>' +
+      '<span class="lbl">Now · ' + escapeHtml(cur.label) + '</span>' +
+      '<span class="time">' + (cur.start ? fmt12(cur.start) : "") + '</span>' +
+      '<span class="chev">▾</span></div>';
+    var body = "";
+    if (schedOpen && schedEditing) {
+      body = '<div class="sched-body">' + schedule.map(function (b, i) {
+        return '<div class="blk edit" data-idx="' + i + '" data-dom="' + escapeHtml(b.dom || "") + '">' +
+          '<input type="time" value="' + escapeHtml(b.start) + '">' +
+          '<input class="blabel-in" value="' + escapeHtml(b.label) + '" placeholder="Label">' +
+          '<input class="bnote-in" value="' + escapeHtml(b.note || "") + '" placeholder="Note">' +
+          '<button class="del" data-act="del" title="Remove">✕</button></div>';
+      }).join("") +
+        '<div class="sched-actions">' +
+          '<button class="lnk" data-act="add">+ Add block</button>' +
+          '<button class="lnk" data-act="save">Save</button>' +
+          '<button class="lnk muted" data-act="reset">Reset to Franklin</button>' +
+        '</div></div>';
+    } else if (schedOpen) {
+      body = '<div class="sched-body">' + schedule.map(function (b, i) {
+        var cls = "blk" + (i === idx ? " now" : "") + (i < idx ? " past" : "");
+        return '<div class="' + cls + '">' +
+          '<span class="bt">' + fmt12(b.start) + '</span>' +
+          '<span class="bdot" style="background:' + domColor(b.dom) + '"></span>' +
+          '<span class="bmain"><span class="blabel">' + escapeHtml(b.label) + '</span>' +
+          (b.note ? '<span class="bnote">' + escapeHtml(b.note) + '</span>' : "") + '</span></div>';
+      }).join("") +
+        '<div class="sched-actions"><button class="lnk" data-act="edit">Edit schedule</button></div></div>';
+    }
+    host.innerHTML = now + body;
+  }
+
+  // ======================= Bookend ritual (morning/evening questions) =======================
+  function bookendDone(e) { return !!(e && e.am_intent && e.am_intent.trim() && e.pm_review && e.pm_review.trim()); }
+  function bookendStreak() {
+    var d = new Date(today);
+    if (!(data[ymd(d)] && bookendDone(data[ymd(d)]))) d = addDays(d, -1); // today not done yet → count up to yesterday
+    var n = 0;
+    for (;;) { var e = data[ymd(d)]; if (e && bookendDone(e)) { n++; d = addDays(d, -1); } else break; }
+    return n;
+  }
+  function updateBookendMeta() {
+    var el = document.getElementById("beStreak");
+    if (el) { var n = bookendStreak(); el.textContent = n > 0 ? (n + "-day streak") : ""; }
+  }
+  function autosize(t) { t.style.height = "auto"; t.style.height = (t.scrollHeight) + "px"; }
+  function renderBookend() {
+    var host = document.getElementById("bookend");
+    if (document.activeElement && host.contains(document.activeElement)) { updateBookendMeta(); return; } // don't clobber typing
+    var e = dayEntry(selectedKey);
+    var am = e.am_intent || "", pm = e.pm_review || "";
+    var isToday = selectedKey === todayKey;
+    var hour = new Date().getHours();
+    var phase = !isToday ? "both" : (hour < 13 ? "am" : (hour >= 17 ? "pm" : "both"));
+    host.innerHTML =
+      '<div class="bookend-top"><span class="ttl">Daily bookend</span><span class="bookend-streak" id="beStreak"></span></div>' +
+      '<div class="be-row' + (phase === "pm" ? " dim" : "") + '">' +
+        '<div class="be-q"><span class="qdot' + (am.trim() ? " on" : "") + '"></span>What good shall I do this day?</div>' +
+        '<textarea data-field="am_intent" rows="1" placeholder="One good you’ll do today…">' + escapeHtml(am) + '</textarea>' +
+      '</div>' +
+      '<div class="be-row' + (phase === "am" ? " dim" : "") + '">' +
+        '<div class="be-q"><span class="qdot' + (pm.trim() ? " on" : "") + '"></span>What good have I done today?</div>' +
+        (am.trim() ? '<div class="be-recall">This morning: “' + escapeHtml(am) + '”</div>' : "") +
+        '<textarea data-field="pm_review" rows="1" placeholder="One good you did today…">' + escapeHtml(pm) + '</textarea>' +
+      '</div>';
+    Array.prototype.forEach.call(host.querySelectorAll("textarea"), autosize);
+    updateBookendMeta();
+  }
+
   function renderAll() {
     renderDaySwitch();
     renderCards();
     renderToday();
     renderWeekBar();
     renderGrid();
+    if (!schedEditing) renderSchedule();
+    renderBookend();
   }
+
+  // Schedule interactions (delegated on the stable container).
+  document.getElementById("sched").addEventListener("click", function (ev) {
+    var act = ev.target.closest && ev.target.closest("[data-act]");
+    if (!act) return;
+    var a = act.getAttribute("data-act");
+    if (a === "toggle") { if (!schedEditing) { schedOpen = !schedOpen; renderSchedule(); } return; }
+    if (a === "edit")  { schedEditing = true; schedOpen = true; renderSchedule(); return; }
+    if (a === "add")   { schedule = readEdits(); schedule.push({ start: "12:00", label: "New block", note: "", dom: "" }); renderSchedule(); return; }
+    if (a === "del")   { var row = act.closest(".blk"); var i = +row.getAttribute("data-idx"); var arr = readEdits(); arr.splice(i, 1); schedule = arr; renderSchedule(); return; }
+    if (a === "reset") { schedule = loadDefaultSched(); sortSched(); saveSched(schedule); schedEditing = false; renderSchedule(); return; }
+    if (a === "save")  { schedule = readEdits(); sortSched(); saveSched(schedule); schedEditing = false; renderSchedule(); return; }
+  });
+  function loadDefaultSched() { return DEFAULT_SCHED.map(function (b) { return { start: b.start, label: b.label, note: b.note, dom: b.dom }; }); }
+
+  // Bookend interactions: update live on input (no rebuild → keeps focus), sync on blur.
+  document.getElementById("bookend").addEventListener("input", function (ev) {
+    var t = ev.target; if (t.tagName !== "TEXTAREA") return;
+    var e = dayEntry(selectedKey);
+    e[t.getAttribute("data-field")] = t.value;
+    e.updated_at = Date.now();
+    data[selectedKey] = e;
+    save(data);
+    var dot = t.parentNode.querySelector(".qdot"); if (dot) dot.classList.toggle("on", !!t.value.trim());
+    autosize(t);
+    updateBookendMeta();
+  });
+  document.getElementById("bookend").addEventListener("focusout", function (ev) {
+    if (ev.target.tagName === "TEXTAREA") pushDay(selectedKey);
+  });
+
+  // Keep the "Now" block and bookend phase current through the day.
+  setInterval(function () { if (!schedEditing) renderSchedule(); renderBookend(); }, 60000);
 
   // Day switcher controls.
   document.getElementById("dayPrev").addEventListener("click", function () {
@@ -782,6 +988,7 @@
       money: !!r.money, family: !!r.family,
       hmove: !!r.hmove, heat: !!r.heat, hsleep: !!r.hsleep,
       vind: !!r.vind, vsin: !!r.vsin, vtrq: !!r.vtrq, vrest: !!r.vrest,
+      am_intent: r.am_intent || "", pm_review: r.pm_review || "",
       updated_at: r.updated_at ? Date.parse(r.updated_at) : 0
     };
     e.health = healthDone(e);
@@ -797,10 +1004,14 @@
       money: !!e.money, family: !!e.family,
       hmove: !!e.hmove, heat: !!e.heat, hsleep: !!e.hsleep, health: healthDone(e),
       vind: !!e.vind, vsin: !!e.vsin, vtrq: !!e.vtrq, vrest: !!e.vrest, self: selfDone(e),
+      am_intent: e.am_intent || "", pm_review: e.pm_review || "",
       updated_at: new Date(e.updated_at || Date.now()).toISOString()
     };
   }
-  function hasData(e) { return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.family || e.vind || e.vsin || e.vtrq || e.vrest)); }
+  function hasData(e) {
+    return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.family || e.vind || e.vsin || e.vtrq || e.vrest ||
+      (e.am_intent && e.am_intent.trim()) || (e.pm_review && e.pm_review.trim())));
+  }
 
   function pushDay(day) {
     if (!sb || !session) return;
@@ -817,7 +1028,7 @@
     if (!sb || !session || syncing) return;
     syncing = true;
     setPill("busy", "Syncing…");
-    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,vrest,updated_at")
+    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,vrest,am_intent,pm_review,updated_at")
       .then(function (res) {
         if (res.error) { setPill("err", "Sync error"); syncing = false; return; }
         var remote = {};
