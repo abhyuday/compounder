@@ -112,6 +112,14 @@
   .be-recall { font-size: 12px; color: var(--muted); font-style: italic; margin: 0 0 6px 16px; }
   .bookend textarea { width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 11px; font-size: 14px; font-family: inherit; line-height: 1.4; resize: none; overflow: hidden; outline: none; }
   .bookend textarea:focus { border-color: var(--accent); }
+  .be-toggle { display: flex; align-items: center; gap: 11px; cursor: pointer; padding: 9px 11px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); transition: border-color .15s ease, background .15s ease; }
+  .be-toggle:hover { border-color: #33404f; }
+  .be-toggle.on { background: var(--done-soft); border-color: rgba(63,185,80,0.4); }
+  .be-box { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--border); background: var(--panel); display: grid; place-items: center; transition: all .15s ease; }
+  .be-toggle.on .be-box { background: var(--done); border-color: var(--done); }
+  .be-box svg { width: 13px; height: 13px; stroke: #0e1116; stroke-width: 3.2; fill: none; opacity: 0; transform: scale(.6); transition: all .15s ease; }
+  .be-toggle.on .be-box svg { opacity: 1; transform: scale(1); }
+  .be-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
 
   /* Day switcher */
   .dayswitch { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
@@ -463,7 +471,7 @@
   function dayEntry(key) {
     return data[key] || { money: false, hmove: false, heat: false, hsleep: false, health: false,
       family: false, vind: false, vsin: false, vtrq: false, vrest: false, self: false,
-      am_intent: "", pm_review: "", am_hard: "", pm_hard: "", notes: {} };
+      am_intent: "", pm_review: "", hard: false, notes: {} };
   }
   function dayPoints(key) {
     var e = data[key]; if (!e) return 0;
@@ -861,23 +869,23 @@
     var host = document.getElementById("bookend");
     if (document.activeElement && host.contains(document.activeElement)) { updateBookendMeta(); return; } // don't clobber typing
     var e = dayEntry(selectedKey);
-    var amG = e.am_intent || "", amH = e.am_hard || "", pmG = e.pm_review || "", pmH = e.pm_hard || "";
+    var amG = e.am_intent || "", pmG = e.pm_review || "";
     var isToday = selectedKey === todayKey;
     var hour = new Date().getHours();
     var phase = !isToday ? "both" : (hour < 13 ? "am" : (hour >= 17 ? "pm" : "both"));
-    var recall = "";
-    if (amG.trim()) recall += '<div class="be-recall">This morning — good: “' + escapeHtml(amG) + '”</div>';
-    if (amH.trim()) recall += '<div class="be-recall">This morning — hard: “' + escapeHtml(amH) + '”</div>';
+    var recall = amG.trim() ? '<div class="be-recall">This morning: “' + escapeHtml(amG) + '”</div>' : "";
     host.innerHTML =
       '<div class="bookend-top"><span class="ttl">Daily bookend</span><span class="bookend-streak" id="beStreak"></span></div>' +
       '<div class="be-section' + (phase === "pm" ? " dim" : "") + '">' +
         beBlock("am_intent", "What good shall I do this day?", "One good you’ll do today…", amG) +
-        beBlock("am_hard", "What hard thing will I face today?", "The thing you’re avoiding…", amH) +
+        '<div class="be-toggle' + (e.hard ? " on" : "") + '" data-hard>' +
+          '<span class="be-box">' + checkSVG + '</span>' +
+          '<span class="be-label">What hard thing shall I do this day?</span>' +
+        '</div>' +
       '</div>' +
       '<div class="be-section' + (phase === "am" ? " dim" : "") + '">' +
         beBlock("pm_review", "What good have I done today?", "One good you did today…", pmG) +
         recall +
-        beBlock("pm_hard", "What hard thing did I face today?", "What you pushed through…", pmH) +
       '</div>';
     Array.prototype.forEach.call(host.querySelectorAll("textarea"), autosize);
     updateBookendMeta();
@@ -921,6 +929,14 @@
   });
   document.getElementById("bookend").addEventListener("focusout", function (ev) {
     if (ev.target.tagName === "TEXTAREA") pushDay(selectedKey);
+  });
+  // The hard-thing yes/no toggle.
+  document.getElementById("bookend").addEventListener("click", function (ev) {
+    if (!(ev.target.closest && ev.target.closest("[data-hard]"))) return;
+    var e = dayEntry(selectedKey);
+    e.hard = !e.hard; e.updated_at = Date.now();
+    data[selectedKey] = e; save(data); pushDay(selectedKey);
+    renderBookend();
   });
 
   // Keep the "Now" block and bookend phase current through the day.
@@ -1095,8 +1111,7 @@
       money: !!r.money, family: !!r.family,
       hmove: !!r.hmove, heat: !!r.heat, hsleep: !!r.hsleep,
       vind: !!r.vind, vsin: !!r.vsin, vtrq: !!r.vtrq, vrest: !!r.vrest,
-      am_intent: r.am_intent || "", pm_review: r.pm_review || "",
-      am_hard: r.am_hard || "", pm_hard: r.pm_hard || "",
+      am_intent: r.am_intent || "", pm_review: r.pm_review || "", hard: !!r.hard,
       notes: r.notes || {},
       updated_at: r.updated_at ? Date.parse(r.updated_at) : 0
     };
@@ -1113,8 +1128,7 @@
       money: !!e.money, family: !!e.family,
       hmove: !!e.hmove, heat: !!e.heat, hsleep: !!e.hsleep, health: healthDone(e),
       vind: !!e.vind, vsin: !!e.vsin, vtrq: !!e.vtrq, vrest: !!e.vrest, self: selfDone(e),
-      am_intent: e.am_intent || "", pm_review: e.pm_review || "",
-      am_hard: e.am_hard || "", pm_hard: e.pm_hard || "",
+      am_intent: e.am_intent || "", pm_review: e.pm_review || "", hard: !!e.hard,
       notes: e.notes || {},
       updated_at: new Date(e.updated_at || Date.now()).toISOString()
     };
@@ -1124,8 +1138,7 @@
   }
   function hasData(e) {
     return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.family || e.vind || e.vsin || e.vtrq || e.vrest ||
-      (e.am_intent && e.am_intent.trim()) || (e.pm_review && e.pm_review.trim()) ||
-      (e.am_hard && e.am_hard.trim()) || (e.pm_hard && e.pm_hard.trim()) || hasNotes(e)));
+      (e.am_intent && e.am_intent.trim()) || (e.pm_review && e.pm_review.trim()) || e.hard || hasNotes(e)));
   }
 
   function pushDay(day) {
@@ -1143,7 +1156,7 @@
     if (!sb || !session || syncing) return;
     syncing = true;
     setPill("busy", "Syncing…");
-    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,vrest,am_intent,pm_review,am_hard,pm_hard,notes,updated_at")
+    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,vrest,am_intent,pm_review,hard,notes,updated_at")
       .then(function (res) {
         if (res.error) { setPill("err", "Sync error"); syncing = false; return; }
         var remote = {};
