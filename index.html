@@ -129,11 +129,10 @@
   .cards { display: flex; flex-direction: column; gap: 12px; }
   .card {
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 16px 18px; box-shadow: var(--shadow); cursor: pointer; user-select: none;
-    transition: border-color .18s ease, background .18s ease, transform .06s ease;
+    padding: 16px 18px; box-shadow: var(--shadow); user-select: none;
+    transition: border-color .18s ease, background .18s ease;
     position: relative; overflow: hidden;
   }
-  .card:active { transform: scale(0.995); }
   .card::before {
     content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
     background: var(--dc); opacity: .85;
@@ -156,8 +155,7 @@
   .card.done .check svg { opacity: 1; transform: scale(1); }
 
   .domain { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dc); font-weight: 600; }
-  .move { font-size: 15px; color: var(--text); margin-top: 3px; }
-  .scored { font-size: 12px; color: var(--faint); margin-top: 7px; padding-left: 38px; }
+  .scored { font-size: 12px; color: var(--faint); margin-top: 9px; }
   .card.done .scored { color: var(--muted); }
   .flex-title { flex: 1; }
   .status { font-size: 12.5px; font-weight: 600; color: var(--faint); white-space: nowrap; }
@@ -224,12 +222,10 @@
   .subtext { display: flex; flex-direction: column; line-height: 1.25; }
   .subname { font-size: 14px; font-weight: 600; color: var(--text); }
   .subhint { font-size: 12px; color: var(--muted); }
-  .subs-card .scored { padding-left: 0; }
+  .submove { font-size: 13.5px; color: var(--text); line-height: 1.4; }
 
   /* Per-item notes (non-intrusive) */
-  .notewrap { margin-top: 7px; }
-  .card > .notewrap { padding-left: 38px; }
-  .sub .notewrap { margin-top: 5px; }
+  .notewrap { margin-top: 5px; }
   .note-add { background: none; border: none; color: var(--faint); font-size: 11.5px; cursor: pointer; padding: 1px 0; }
   .note-add:hover { color: var(--muted); }
   .note-line { font-size: 12px; color: var(--muted); font-style: italic; cursor: text; }
@@ -508,57 +504,42 @@
     var e = dayEntry(selectedKey);
     cardsEl.innerHTML = "";
     DOMAINS.forEach(function (dom) {
+      // Unified layout: every card is a header (domain + status) over a list of
+      // check rows. A single-checkbox domain is just a one-row card.
+      var multi = !!dom.subs;
+      var rows = multi ? dom.subs : [{ key: dom.key, move: dom.move }];
+      var cnt = rows.reduce(function (n, r) { return n + (e[r.key] ? 1 : 0); }, 0);
+      var done = multi ? (cnt >= 2) : !!e[dom.key];
+      var perfect = multi && cnt === rows.length;
+      var status = multi ? (perfect ? "Perfect" : (done ? "Done" : (cnt + " / " + rows.length)))
+                         : (done ? "Done" : "Not yet");
+
       var card = document.createElement("div");
       card.setAttribute("data-domain", dom.key);
-
-      if (dom.subs) {
-        // Sub-toggle card (Health, Self): point earned at 2 of 3.
-        var subKeys = dom.subs.map(function (s) { return s.key; });
-        var cnt = subKeys.reduce(function (n, k) { return n + (e[k] ? 1 : 0); }, 0);
-        var perfect = cnt === subKeys.length;
-        var done = cnt >= 2;
-        card.className = "card subs-card " + dom.key + (done ? " done" : "");
-        var status = perfect ? "Perfect" : (done ? "Done" : (cnt + " / " + subKeys.length));
-        card.innerHTML =
-          '<div class="card-head">' +
-            '<div class="flex-title"><div class="domain">' + dom.name + '</div></div>' +
-            '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
-          '</div>' +
-          '<div class="subs">' +
-            dom.subs.map(function (s) {
-              return '<div class="sub' + (e[s.key] ? " on" : "") + '" data-sub="' + s.key + '">' +
-                       '<div class="subcheck">' + checkSVG + '</div>' +
-                       '<div class="subtext"><span class="subname">' + s.name + '</span>' +
-                         '<span class="subhint">' + s.hint + '</span>' + noteZone(s.key, e) + '</div>' +
-                     '</div>';
-            }).join("") +
-          '</div>' +
-          '<div class="scored">' + dom.scored + '</div>';
-        Array.prototype.forEach.call(card.querySelectorAll(".sub"), function (el) {
-          el.addEventListener("click", function (ev) {
-            if (ev.target.closest(".notewrap")) return; // taps in the note area don't toggle
-            setDomain(selectedKey, el.getAttribute("data-sub"));
-          });
-        });
-      } else {
-        var on = !!e[dom.key];
-        card.className = "card" + (on ? " done" : "");
-        card.innerHTML =
-          '<div class="card-head">' +
-            '<div class="check">' + checkSVG + '</div>' +
-            '<div class="flex-title">' +
-              '<div class="domain">' + dom.name + '</div>' +
-              '<div class="move">' + dom.move + '</div>' +
-            '</div>' +
-            '<div class="status">' + (on ? "Done" : "Not yet") + '</div>' +
-          '</div>' +
-          '<div class="scored">' + dom.scored + '</div>' +
-          noteZone(dom.key, e);
-        card.addEventListener("click", function (ev) {
+      card.className = "card subs-card " + dom.key + (done ? " done" : "");
+      card.innerHTML =
+        '<div class="card-head">' +
+          '<div class="flex-title"><div class="domain">' + dom.name + '</div></div>' +
+          '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
+        '</div>' +
+        '<div class="subs">' +
+          rows.map(function (r) {
+            var text = multi
+              ? '<span class="subname">' + r.name + '</span><span class="subhint">' + r.hint + '</span>'
+              : '<span class="submove">' + r.move + '</span>';
+            return '<div class="sub' + (e[r.key] ? " on" : "") + '" data-sub="' + r.key + '">' +
+                     '<div class="subcheck">' + checkSVG + '</div>' +
+                     '<div class="subtext">' + text + noteZone(r.key, e) + '</div>' +
+                   '</div>';
+          }).join("") +
+        '</div>' +
+        '<div class="scored">' + dom.scored + '</div>';
+      Array.prototype.forEach.call(card.querySelectorAll(".sub"), function (el) {
+        el.addEventListener("click", function (ev) {
           if (ev.target.closest(".notewrap")) return; // taps in the note area don't toggle
-          setDomain(selectedKey, dom.key);
+          setDomain(selectedKey, el.getAttribute("data-sub"));
         });
-      }
+      });
       cardsEl.appendChild(card);
     });
   }
