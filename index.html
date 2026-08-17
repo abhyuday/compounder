@@ -225,6 +225,18 @@
   .subname { font-size: 14px; font-weight: 600; color: var(--text); }
   .subhint { font-size: 12px; color: var(--muted); }
   .subs-card .scored { padding-left: 0; }
+
+  /* Per-item notes (non-intrusive) */
+  .notewrap { margin-top: 7px; }
+  .card > .notewrap { padding-left: 38px; }
+  .sub .notewrap { margin-top: 5px; }
+  .note-add { background: none; border: none; color: var(--faint); font-size: 11.5px; cursor: pointer; padding: 1px 0; }
+  .note-add:hover { color: var(--muted); }
+  .note-line { font-size: 12px; color: var(--muted); font-style: italic; cursor: text; }
+  .note-line::before { content: "\201C"; }
+  .note-line::after { content: "\201D"; }
+  .note-input { width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 13px; font-family: inherit; outline: none; }
+  .note-input:focus { border-color: var(--accent); }
   .grid tr.total td { padding-top: 9px; font-variant-numeric: tabular-nums; color: var(--muted); }
   .grid tr.total td.tt { font-weight: 700; color: var(--text); }
   .grid td.today-col { background: rgba(217,164,65,0.07); border-radius: 4px; }
@@ -453,7 +465,7 @@
   function dayEntry(key) {
     return data[key] || { money: false, hmove: false, heat: false, hsleep: false, health: false,
       family: false, vind: false, vsin: false, vtrq: false, vrest: false, self: false,
-      am_intent: "", pm_review: "" };
+      am_intent: "", pm_review: "", notes: {} };
   }
   function dayPoints(key) {
     var e = data[key]; if (!e) return 0;
@@ -475,6 +487,23 @@
   var cardsEl = document.getElementById("cards");
   var checkSVG = '<svg viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+  // A non-intrusive per-item note: "+ note" when empty, a quiet italic line when
+  // set, an inline input while editing. Bind via data-attrs; handled by delegation.
+  function noteZone(key, e) {
+    var val = (e.notes && e.notes[key]) ? String(e.notes[key]) : "";
+    if (noteEditing === key) {
+      return '<div class="notewrap"><input class="note-input" data-noteinput="' + key +
+        '" value="' + escapeHtml(val) + '" placeholder="What did you do?" /></div>';
+    }
+    if (val.trim()) {
+      return '<div class="notewrap"><span class="note-line" data-note="' + key + '">' + escapeHtml(val) + '</span></div>';
+    }
+    return '<div class="notewrap"><button class="note-add" data-note="' + key + '">+ note</button></div>';
+  }
+
+  function noteInputFocused() {
+    return !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-noteinput]"));
+  }
   function renderCards() {
     var e = dayEntry(selectedKey);
     cardsEl.innerHTML = "";
@@ -500,13 +529,16 @@
               return '<div class="sub' + (e[s.key] ? " on" : "") + '" data-sub="' + s.key + '">' +
                        '<div class="subcheck">' + checkSVG + '</div>' +
                        '<div class="subtext"><span class="subname">' + s.name + '</span>' +
-                         '<span class="subhint">' + s.hint + '</span></div>' +
+                         '<span class="subhint">' + s.hint + '</span>' + noteZone(s.key, e) + '</div>' +
                      '</div>';
             }).join("") +
           '</div>' +
           '<div class="scored">' + dom.scored + '</div>';
         Array.prototype.forEach.call(card.querySelectorAll(".sub"), function (el) {
-          el.addEventListener("click", function () { setDomain(selectedKey, el.getAttribute("data-sub")); });
+          el.addEventListener("click", function (ev) {
+            if (ev.target.closest(".notewrap")) return; // taps in the note area don't toggle
+            setDomain(selectedKey, el.getAttribute("data-sub"));
+          });
         });
       } else {
         var on = !!e[dom.key];
@@ -520,12 +552,46 @@
             '</div>' +
             '<div class="status">' + (on ? "Done" : "Not yet") + '</div>' +
           '</div>' +
-          '<div class="scored">' + dom.scored + '</div>';
-        card.addEventListener("click", function () { setDomain(selectedKey, dom.key); });
+          '<div class="scored">' + dom.scored + '</div>' +
+          noteZone(dom.key, e);
+        card.addEventListener("click", function (ev) {
+          if (ev.target.closest(".notewrap")) return; // taps in the note area don't toggle
+          setDomain(selectedKey, dom.key);
+        });
       }
       cardsEl.appendChild(card);
     });
   }
+
+  // Note editing state + interactions (delegated on the stable #cards container).
+  var noteEditing = null;
+  function openNote(key) {
+    noteEditing = key;
+    renderCards();
+    var inp = cardsEl.querySelector('[data-noteinput="' + key + '"]');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+  cardsEl.addEventListener("click", function (ev) {
+    var o = ev.target.closest && ev.target.closest("[data-note]");
+    if (o) { ev.stopPropagation(); openNote(o.getAttribute("data-note")); }
+  });
+  cardsEl.addEventListener("input", function (ev) {
+    var inp = ev.target.closest && ev.target.closest("[data-noteinput]"); if (!inp) return;
+    var key = inp.getAttribute("data-noteinput");
+    var en = dayEntry(selectedKey); en.notes = en.notes || {}; en.notes[key] = inp.value;
+    en.updated_at = Date.now(); data[selectedKey] = en; save(data);
+  });
+  cardsEl.addEventListener("focusout", function (ev) {
+    if (!(ev.target.closest && ev.target.closest("[data-noteinput]"))) return;
+    pushDay(selectedKey);
+    // Defer the close so we don't tear down the input during its own blur. If
+    // another note was opened in the meantime, leave that one open.
+    var closingKey = noteEditing;
+    setTimeout(function () { if (noteEditing === closingKey) { noteEditing = null; renderCards(); } }, 0);
+  });
+  cardsEl.addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter" && ev.target.closest && ev.target.closest("[data-noteinput]")) ev.target.blur();
+  });
 
   // Toggle one field on a given day. Handles simple domains and Health sub-flags.
   // Never allows a future day.
@@ -827,7 +893,7 @@
 
   function renderAll() {
     renderDaySwitch();
-    renderCards();
+    if (!noteInputFocused()) renderCards(); // don't steal focus while a note is being typed
     renderToday();
     renderWeekBar();
     renderGrid();
@@ -1038,6 +1104,7 @@
       hmove: !!r.hmove, heat: !!r.heat, hsleep: !!r.hsleep,
       vind: !!r.vind, vsin: !!r.vsin, vtrq: !!r.vtrq, vrest: !!r.vrest,
       am_intent: r.am_intent || "", pm_review: r.pm_review || "",
+      notes: r.notes || {},
       updated_at: r.updated_at ? Date.parse(r.updated_at) : 0
     };
     e.health = healthDone(e);
@@ -1054,12 +1121,16 @@
       hmove: !!e.hmove, heat: !!e.heat, hsleep: !!e.hsleep, health: healthDone(e),
       vind: !!e.vind, vsin: !!e.vsin, vtrq: !!e.vtrq, vrest: !!e.vrest, self: selfDone(e),
       am_intent: e.am_intent || "", pm_review: e.pm_review || "",
+      notes: e.notes || {},
       updated_at: new Date(e.updated_at || Date.now()).toISOString()
     };
   }
+  function hasNotes(e) {
+    return !!(e && e.notes && Object.keys(e.notes).some(function (k) { return e.notes[k] && String(e.notes[k]).trim(); }));
+  }
   function hasData(e) {
     return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.family || e.vind || e.vsin || e.vtrq || e.vrest ||
-      (e.am_intent && e.am_intent.trim()) || (e.pm_review && e.pm_review.trim())));
+      (e.am_intent && e.am_intent.trim()) || (e.pm_review && e.pm_review.trim()) || hasNotes(e)));
   }
 
   function pushDay(day) {
@@ -1077,7 +1148,7 @@
     if (!sb || !session || syncing) return;
     syncing = true;
     setPill("busy", "Syncing…");
-    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,vrest,am_intent,pm_review,updated_at")
+    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,vrest,am_intent,pm_review,notes,updated_at")
       .then(function (res) {
         if (res.error) { setPill("err", "Sync error"); syncing = false; return; }
         var remote = {};
