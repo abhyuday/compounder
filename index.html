@@ -28,6 +28,7 @@
     --health: #3fb950;
     --family: #db6d9c;
     --self: #a371f7;
+    --comfort: #e0704a;
     --radius: 14px;
     --shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.35);
   }
@@ -201,6 +202,7 @@
   .card[data-domain="health"] { --dc: var(--health); }
   .card[data-domain="family"] { --dc: var(--family); }
   .card[data-domain="self"]   { --dc: var(--self); }
+  .card[data-domain="hard"]   { --dc: var(--comfort); }
 
   .card.done { background: linear-gradient(0deg, var(--done-soft), var(--done-soft)), var(--panel); border-color: rgba(63,185,80,0.4); }
 
@@ -248,6 +250,7 @@
   .cell.on[data-d="health"] { background: var(--health); }
   .cell.on[data-d="family"] { background: var(--family); }
   .cell.on[data-d="self"]   { background: var(--self); }
+  .cell.on[data-d="hard"]   { background: var(--comfort); }
   .cell.editable { cursor: pointer; }
   .cell.editable:hover { outline: 2px solid rgba(139,152,169,0.55); outline-offset: 1px; }
   .cell.future { opacity: .4; }
@@ -417,7 +420,7 @@
         <span class="pill" id="syncPill"><span>Sign in</span></span>
       </div>
     </div>
-    <div class="tagline">Four points a day. Target is 20 a week — not 28. That number is the whole system.</div>
+    <div class="tagline">Five points a day. Target is 25 a week — not 35. That number is the whole system.</div>
   </header>
 
   <section class="auth-panel" id="authPanel"></section>
@@ -429,7 +432,7 @@
   <section class="week">
     <div class="week-top">
       <span class="week-label" id="weekLabel">This week</span>
-      <span class="week-num"><b id="weekPts">0</b><span class="poss"> / <span class="target">20 target</span> · 28 possible</span></span>
+      <span class="week-num"><b id="weekPts">0</b><span class="poss"> / <span class="target" id="weekTargetLbl">25 target</span> · <span id="weekPossLbl">35 possible</span></span></span>
     </div>
     <div class="track">
       <div class="fill" id="weekFill" style="width:0%"></div>
@@ -437,8 +440,6 @@
     </div>
     <div class="week-foot" id="weekFoot"></div>
   </section>
-
-  <section class="bookend" id="bookend"></section>
 
   <div class="dayswitch">
     <button class="daynav" id="dayPrev" aria-label="Previous day">◀</button>
@@ -452,7 +453,7 @@
   <section class="cards" id="cards"></section>
 
   <div class="today">
-    <span><span id="scoreLabel">Today</span> — <b id="todayScore">0</b> of 4</span>
+    <span><span id="scoreLabel">Today</span> — <b id="todayScore">0</b> of <b id="todayMax">5</b></span>
     <span class="pips" id="pips"></span>
   </div>
 
@@ -466,7 +467,7 @@
   </section>
 
   <footer>
-    <div class="big">A bad week is 20. A perfect week is a trap.</div>
+    <div class="big">A bad week is 25. A perfect week is a trap.</div>
     <div>Signed in, your board syncs across every device.</div>
   </footer>
 </div>
@@ -477,7 +478,7 @@
   "use strict";
 
   var STORE = "compounder.v1";
-  var TARGET = 20;
+  var TARGET = 25;
 
   // ---- Supabase config ----
   var SB_URL = "https://qgovfymvmhcqlpmwdddw.supabase.co";
@@ -497,8 +498,11 @@
       { key: "vsin",  name: "Sincerity",   hint: "Honest and clean-tongued. No deceit, no idle harm." },
       { key: "vtrq",  name: "Soft Skills", hint: "Sharpened a soft skill — public speaking, music, dance, improv, or networking." },
       { key: "vrest", name: "Restoration", hint: "30 min of chosen nothing. Not the feed." }
-    ] }
+    ] },
+    { key: "hard",   name: "Comfort Zone", short: "Comfort", word: "Push", move: "One hard thing you'd rather avoid — the dreaded workout, the awkward call, the cold outreach. Leave the comfort zone.", scored: "Done / not" }
   ];
+  var DAILY_MAX = DOMAINS.length;   // one point per domain
+  var WEEK_MAX = DAILY_MAX * 7;
   var HEALTH_SUBS = ["hmove", "heat", "hsleep"];
   function healthCount(e) { return HEALTH_SUBS.reduce(function (n, k) { return n + (e && e[k] ? 1 : 0); }, 0); }
   function healthDone(e) { return healthCount(e) >= 2; }
@@ -569,7 +573,7 @@
   }
   function dayPoints(key) {
     var e = data[key]; if (!e) return 0;
-    return (e.money?1:0) + (healthDone(e)?1:0) + (e.family?1:0) + (selfDone(e)?1:0);
+    return (e.money?1:0) + (healthDone(e)?1:0) + (e.family?1:0) + (selfDone(e)?1:0) + (e.hard?1:0);
   }
   function weekPoints(monday) {
     var t = 0;
@@ -672,7 +676,7 @@
   // Note editing state + interactions. id = "key:index". Handlers are shared by
   // the cards (#cards) and the bookend (#bookend).
   var noteEditing = null;
-  function renderNotes() { renderCards(); renderBookend(); }
+  function renderNotes() { renderCards(); }
   function openNoteId(id) {
     noteEditing = id;
     renderNotes();
@@ -777,9 +781,10 @@
     var pts = dayPoints(selectedKey);
     document.getElementById("todayScore").textContent = pts;
     document.getElementById("scoreLabel").textContent = dayLabel(selectedKey);
+    document.getElementById("todayMax").textContent = DAILY_MAX;
     var pips = document.getElementById("pips");
     pips.innerHTML = "";
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < DAILY_MAX; i++) {
       var p = document.createElement("span");
       p.className = "pip" + (i < pts ? " on" : "");
       pips.appendChild(p);
@@ -790,18 +795,20 @@
   function renderWeekBar() {
     var pts = weekPoints(thisMonday);
     document.getElementById("weekPts").textContent = pts;
-    var pct = Math.min(100, (pts / 28) * 100);
+    document.getElementById("weekTargetLbl").textContent = TARGET + " target";
+    document.getElementById("weekPossLbl").textContent = WEEK_MAX + " possible";
+    var pct = Math.min(100, (pts / WEEK_MAX) * 100);
     document.getElementById("weekFill").style.width = pct + "%";
-    document.getElementById("weekGoal").style.left = ((TARGET / 28) * 100) + "%";
+    document.getElementById("weekGoal").style.left = ((TARGET / WEEK_MAX) * 100) + "%";
 
     var foot = document.getElementById("weekFoot");
     var remaining = TARGET - pts;
     if (pts >= TARGET) {
-      foot.innerHTML = "✓ <b>Target hit.</b> Everything past 20 is a bonus, not the point.";
+      foot.innerHTML = "✓ <b>Target hit.</b> Everything past " + TARGET + " is a bonus, not the point.";
     } else {
       var dayIdx = (today.getDay() + 6) % 7; // 0..6
       var daysLeft = 6 - dayIdx; // days after today in the week
-      foot.innerHTML = "<b>" + remaining + "</b> more to hit 20 · " + (daysLeft + 1) + " day" + (daysLeft === 0 ? "" : "s") + " left this week.";
+      foot.innerHTML = "<b>" + remaining + "</b> more to hit " + TARGET + " · " + (daysLeft + 1) + " day" + (daysLeft === 0 ? "" : "s") + " left this week.";
     }
   }
 
@@ -829,7 +836,7 @@
     html += "</tr></thead><tbody>";
 
     DOMAINS.forEach(function (dom) {
-      html += "<tr><td class='rowh'>" + dom.name + "</td>";
+      html += "<tr><td class='rowh'>" + (dom.short || dom.name) + "</td>";
       for (var i = 0; i < 7; i++) {
         var d = addDays(viewMonday, i);
         var k = ymd(d);
@@ -1166,41 +1173,6 @@
     if (a === "save")  { rewardsCat = readRewardEdits(); saveRewardsCat(rewardsCat); rewardsEditing = false; renderRewards(); return; }
   });
 
-  // ======================= Bookend ritual (morning/evening questions) =======================
-  function bookendDone(e) { return !!(e && e.hard); }
-  function bookendStreak() {
-    var d = new Date(today);
-    if (!(data[ymd(d)] && bookendDone(data[ymd(d)]))) d = addDays(d, -1); // today not done yet → count up to yesterday
-    var n = 0;
-    for (;;) { var e = data[ymd(d)]; if (e && bookendDone(e)) { n++; d = addDays(d, -1); } else break; }
-    return n;
-  }
-  function updateBookendMeta() {
-    var el = document.getElementById("beStreak");
-    if (el) { var n = bookendStreak(); el.textContent = n > 0 ? (n + "-day streak") : ""; }
-  }
-  function autosize(t) { t.style.height = "auto"; t.style.height = (t.scrollHeight) + "px"; }
-  function beBlock(field, question, placeholder, val) {
-    return '<div class="be-row">' +
-        '<div class="be-q"><span class="qdot' + (val.trim() ? " on" : "") + '"></span>' + question + '</div>' +
-        '<textarea data-field="' + field + '" rows="1" placeholder="' + placeholder + '">' + escapeHtml(val) + '</textarea>' +
-      '</div>';
-  }
-  function renderBookend() {
-    var host = document.getElementById("bookend");
-    // Don't rebuild while the note is being typed (would steal focus).
-    if (document.activeElement && host.contains(document.activeElement) && document.activeElement.closest("[data-noteinput]")) return;
-    var e = dayEntry(selectedKey);
-    host.innerHTML =
-      '<div class="bookend-top"><span class="ttl">Daily bookend</span><span class="bookend-streak" id="beStreak"></span></div>' +
-      '<div class="be-toggle' + (e.hard ? " on" : "") + '" data-hard>' +
-        '<span class="be-box">' + checkSVG + '</span>' +
-        '<span class="be-label">What hard thing shall I do this day?</span>' +
-      '</div>' +
-      noteZone("hard", e);
-    updateBookendMeta();
-  }
-
   function renderAll() {
     renderDaySwitch();
     if (!noteInputFocused()) renderCards(); // don't steal focus while a note is being typed
@@ -1209,7 +1181,6 @@
     renderGrid();
     if (!schedEditing) renderSchedule();
     if (!rewardsEditing) renderRewards();
-    renderBookend();
   }
 
   // Schedule interactions (delegated on the stable container).
@@ -1226,20 +1197,8 @@
   });
   function loadDefaultSched() { return DEFAULT_SCHED.map(function (b) { return { start: b.start, label: b.label, note: b.note, dom: b.dom }; }); }
 
-  // Bookend: the hard-thing toggle plus its notes (notes use the shared handlers).
-  document.getElementById("bookend").addEventListener("click", function (ev) {
-    if (noteHandleClick(ev)) return; // note add/edit/delete
-    if (ev.target.closest && ev.target.closest("[data-hard]")) {
-      var e = dayEntry(selectedKey);
-      e.hard = !e.hard; e.updated_at = Date.now();
-      data[selectedKey] = e; save(data); pushDay(selectedKey);
-      renderBookend();
-    }
-  });
-  bindNotes(document.getElementById("bookend"));
-
-  // Keep the "Now" block and bookend phase current through the day.
-  setInterval(function () { if (!schedEditing) renderSchedule(); renderBookend(); }, 60000);
+  // Keep the "Now" block current through the day.
+  setInterval(function () { if (!schedEditing) renderSchedule(); }, 60000);
 
   // Day switcher controls.
   document.getElementById("dayPrev").addEventListener("click", function () {
