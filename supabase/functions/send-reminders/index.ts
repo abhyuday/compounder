@@ -1,6 +1,6 @@
 // Compounder reminder sender — a Supabase Edge Function.
-// Invoked hourly by pg_cron; sends a web-push to everyone whose reminder hour
-// (stored in UTC on user_settings.reminders) matches the current UTC hour.
+// Invoked twice a day by pg_cron. The cron passes { "kind": "morning" | "evening" }
+// in the body; this sends that reminder to everyone who has that slot enabled.
 //
 // Required secrets (Edge Function → Secrets):
 //   VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT (e.g. mailto:you@example.com)
@@ -26,33 +26,32 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
   evening: { title: "Compounder", body: "Lock in today's points before they reset at midnight." },
 };
 
-Deno.serve(async () => {
-  const utcHour = new Date().getUTCHours();
+Deno.serve(async (req) => {
+  // Which reminder to send — the cron passes { "kind": "morning" | "evening" }.
+  let kind = "evening";
+  try { const b = await req.json(); if (b && typeof b.kind === "string") kind = b.kind; } catch { /* default */ }
+  const m = MESSAGES[kind] ?? MESSAGES.evening;
 
   const { data: settings, error } = await sb.from("user_settings").select("user_id,reminders");
   if (error) return new Response("settings error: " + error.message, { status: 500 });
 
-  // user_id -> reminder kind due this hour
-  const due = new Map<string, string>();
-  for (const s of settings ?? []) {
-    const rows = Array.isArray(s.reminders) ? s.reminders : [];
-    const hit = rows.find((r: any) => r && r.utc === utcHour);
-    if (hit) due.set(s.user_id, hit.kind);
-  }
-  if (due.size === 0) return new Response("no reminders at UTC " + utcHour);
+  // Users who have this reminder slot enabled.
+  const users = (settings ?? [])
+    .filter((s) => Array.isArray(s.reminders) && s.reminders.some((r: any) => r && r.kind === kind))
+    .map((s) => s.user_id);
+  if (users.length === 0) return new Response("no users for " + kind);
 
-  const { data: subs } = await sb.from("push_subscriptions").select("*").in("user_id", [...due.keys()]);
+  const { data: subs } = await sb.from("push_subscriptions").select("*").in("user_id", users);
+
+  const payload = JSON.stringify({
+    title: m.title,
+    body: m.body,
+    url: "https://abhyuday.github.io/compounder/",
+    tag: "compounder-" + kind,
+  });
 
   let sent = 0;
   for (const s of subs ?? []) {
-    const kind = due.get(s.user_id) ?? "evening";
-    const m = MESSAGES[kind] ?? MESSAGES.evening;
-    const payload = JSON.stringify({
-      title: m.title,
-      body: m.body,
-      url: "https://abhyuday.github.io/compounder/",
-      tag: "compounder-" + kind,
-    });
     try {
       await webpush.sendNotification(s.subscription, payload);
       sent++;
@@ -63,5 +62,5 @@ Deno.serve(async () => {
       }
     }
   }
-  return new Response("sent " + sent + " at UTC " + utcHour);
+  return new Response("sent " + sent + " " + kind);
 });

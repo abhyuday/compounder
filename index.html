@@ -530,7 +530,7 @@
   var sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_ANON) : null;
   var VAPID_PUBLIC = "BMkQUlk5kIZGlRjhrO8ng-iWUrmi3Kjx6s3LLDxeYd6ZB5Zh0-vStYfUbozUi8d7ekJydU7oXYnEJBhm0Y0HFVM";
   // Reminder time presets (local hours) → the app stores their UTC equivalents for the cron.
-  var REMINDER_KINDS = [{ kind: "morning", hour: 8, label: "Morning" }, { kind: "midday", hour: 13, label: "Midday" }, { kind: "evening", hour: 21, label: "Evening" }];
+  var REMINDER_KINDS = [{ kind: "morning", hour: 8, label: "Morning" }, { kind: "evening", hour: 21, label: "Evening" }];
 
   var DOMAINS = [
     { key: "hard",   name: "Comfort Zone", short: "Comfort", word: "Push", move: "One hard thing you'd rather avoid — the dreaded workout, the awkward call, the cold outreach. Leave the comfort zone.", scored: "Done / not" },
