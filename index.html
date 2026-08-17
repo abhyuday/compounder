@@ -395,13 +395,13 @@
   var sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_ANON) : null;
 
   var DOMAINS = [
-    { key: "money",  name: "Money",  move: "One 15-minute move that compounds — fund the account, write a page of the thesis, one real outreach, one position reconciled. Watching the market doesn't count.", scored: "Moved / didn't" },
+    { key: "money",  name: "Money",  word: "Build",    move: "One 15-minute move that compounds — fund the account, write a page of the thesis, one real outreach, one position reconciled. Watching the market doesn't count.", scored: "Moved / didn't" },
     { key: "health", name: "Health", scored: "2 of 3 — win on a bad day", subs: [
       { key: "hmove",  name: "Move",  hint: "Zone 2, a lift, or 8K steps. On purpose." },
       { key: "heat",   name: "Eat",   hint: "Protein first. Nothing you'd hide." },
       { key: "hsleep", name: "Sleep", hint: "Screens down, lights-out by your target." }
     ] },
-    { key: "family", name: "Family", move: "One undistracted block with one specific person. Phone in another room — not face-down. Presence they can feel.", scored: "Present / absent" },
+    { key: "family", name: "Family", word: "Presence", move: "One undistracted block with one specific person. Phone in another room — not face-down. Presence they can feel.", scored: "Present / absent" },
     { key: "self",   name: "Self",   scored: "2 of 4 — hold the line", subs: [
       { key: "vind",  name: "Industry",    hint: "Did what you resolved. No hours bled to nothing." },
       { key: "vsin",  name: "Sincerity",   hint: "Honest and clean-tongued. No deceit, no idle harm." },
@@ -555,7 +555,7 @@
           rows.map(function (r) {
             var text = multi
               ? '<span class="subname">' + r.name + '</span><span class="subhint">' + r.hint + '</span>'
-              : '<span class="submove">' + r.move + '</span>';
+              : '<span class="subname">' + dom.word + '</span><span class="subhint">' + r.move + '</span>';
             return '<div class="sub' + (e[r.key] ? " on" : "") + '" data-sub="' + r.key + '">' +
                      '<div class="subcheck">' + checkSVG + '</div>' +
                      '<div class="subtext">' + text + noteZone(r.key, e) + '</div>' +
