@@ -152,10 +152,10 @@
   .cell.future { opacity: .4; }
   .grid td.sel-col { background: rgba(88,166,255,0.10); border-radius: 4px; }
   .grid th.sel-col { color: var(--money); }
-  .hcell { display: inline-flex; gap: 2px; align-items: center; justify-content: center; }
+  .hcell { display: inline-flex; gap: 1px; align-items: center; justify-content: center; }
   .hcell.selectday { cursor: pointer; }
   .hcell.future { opacity: .4; }
-  .hseg { width: 4px; height: 14px; border-radius: 2px; background: var(--panel-2); border: 1px solid var(--border); }
+  .hseg { width: 3px; height: 14px; border-radius: 2px; background: var(--panel-2); border: 1px solid var(--border); }
   .hcell[data-domain="health"] .hseg.on { background: var(--health); border-color: var(--health); }
   .hcell[data-domain="self"] .hseg.on { background: var(--self); border-color: var(--self); }
   .hcell.selectday:hover .hseg { border-color: #4a5a6b; }
@@ -333,19 +333,19 @@
       { key: "hsleep", name: "Sleep", hint: "Screens down, lights-out by your target." }
     ] },
     { key: "family", name: "Family", move: "One undistracted block with one specific person. Phone in another room — not face-down. Presence they can feel.", scored: "Present / absent" },
-    { key: "self",   name: "Self",   scored: "2 of 3 — hold the line", subs: [
-      { key: "vind", name: "Industry",    hint: "Did what you resolved. No hours bled to nothing." },
-      { key: "vsin", name: "Sincerity",   hint: "Honest and clean-tongued. No deceit, no idle harm." },
-      { key: "vtrq", name: "Tranquility", hint: "Even under trifles. No excess, no overreaction." }
+    { key: "self",   name: "Self",   scored: "2 of 4 — hold the line", subs: [
+      { key: "vind",  name: "Industry",    hint: "Did what you resolved. No hours bled to nothing." },
+      { key: "vsin",  name: "Sincerity",   hint: "Honest and clean-tongued. No deceit, no idle harm." },
+      { key: "vtrq",  name: "Tranquility", hint: "Even under trifles. No excess, no overreaction." },
+      { key: "vrest", name: "Restoration", hint: "30 min of chosen nothing. Not the feed." }
     ] }
   ];
   var HEALTH_SUBS = ["hmove", "heat", "hsleep"];
   function healthCount(e) { return HEALTH_SUBS.reduce(function (n, k) { return n + (e && e[k] ? 1 : 0); }, 0); }
   function healthDone(e) { return healthCount(e) >= 2; }
-  var SELF_SUBS = ["vind", "vsin", "vtrq"];
+  var SELF_SUBS = ["vind", "vsin", "vtrq", "vrest"];
   function selfCount(e) { return SELF_SUBS.reduce(function (n, k) { return n + (e && e[k] ? 1 : 0); }, 0); }
-  // "selfg" grandfathers the old restoration-Self point for days logged before virtues existed.
-  function selfDone(e) { return selfCount(e) >= 2 || !!(e && e.selfg); }
+  function selfDone(e) { return selfCount(e) >= 2; }
 
   // ---- storage (scoped per account, so different users don't mix) ----
   var ANON_KEY = STORE;                 // board used when signed out
@@ -363,9 +363,10 @@
       // The old rule was "one workout PLUS lights-out" → Move + Sleep.
       if (typeof e.hmove !== "boolean") { e.hmove = !!e.health; e.hsleep = !!e.health; e.heat = false; }
       e.health = healthDone(e); // keep the derived point in sync
-      // Self is now three virtues. Grandfather the old restoration point when
-      // virtues were never touched, so past streaks stay intact.
-      if (typeof e.vind !== "boolean") { e.vind = false; e.vsin = false; e.vtrq = false; e.selfg = !!e.self; }
+      // Self is virtues + Restoration. Migrate an old restoration-Self point into
+      // the Restoration toggle for days logged before these fields existed.
+      if (typeof e.vrest !== "boolean") { e.vrest = !!e.self && !(e.vind || e.vsin || e.vtrq); }
+      if (typeof e.vind !== "boolean") { e.vind = false; e.vsin = false; e.vtrq = false; }
       e.self = selfDone(e); // keep the derived point in sync
       if (typeof e.updated_at !== "number") e.updated_at = hasData(e) ? Date.now() : 0;
     });
@@ -404,7 +405,7 @@
 
   function dayEntry(key) {
     return data[key] || { money: false, hmove: false, heat: false, hsleep: false, health: false,
-      family: false, vind: false, vsin: false, vtrq: false, self: false };
+      family: false, vind: false, vsin: false, vtrq: false, vrest: false, self: false };
   }
   function dayPoints(key) {
     var e = data[key]; if (!e) return 0;
@@ -438,7 +439,7 @@
         var subKeys = dom.subs.map(function (s) { return s.key; });
         var cnt = subKeys.reduce(function (n, k) { return n + (e[k] ? 1 : 0); }, 0);
         var perfect = cnt === subKeys.length;
-        var done = cnt >= 2 || (dom.key === "self" && !!e.selfg); // grandfather old Self point
+        var done = cnt >= 2;
         card.className = "card subs-card " + dom.key + (done ? " done" : "");
         var status = perfect ? "Perfect" : (done ? "Done" : (cnt + " / " + subKeys.length));
         card.innerHTML =
@@ -485,7 +486,7 @@
     var e = dayEntry(dayKey);
     e[key] = !e[key];
     if (HEALTH_SUBS.indexOf(key) !== -1) e.health = healthDone(e); // keep derived point in sync
-    if (SELF_SUBS.indexOf(key) !== -1) { e.selfg = false; e.self = selfDone(e); } // engaging virtues drops grandfather
+    if (SELF_SUBS.indexOf(key) !== -1) e.self = selfDone(e); // keep derived point in sync
     e.updated_at = Date.now();
     data[dayKey] = e;
     save(data);
@@ -780,11 +781,13 @@
     var e = {
       money: !!r.money, family: !!r.family,
       hmove: !!r.hmove, heat: !!r.heat, hsleep: !!r.hsleep,
-      vind: !!r.vind, vsin: !!r.vsin, vtrq: !!r.vtrq,
+      vind: !!r.vind, vsin: !!r.vsin, vtrq: !!r.vtrq, vrest: !!r.vrest,
       updated_at: r.updated_at ? Date.parse(r.updated_at) : 0
     };
     e.health = healthDone(e);
-    e.selfg = !!r.self && selfCount(e) < 2; // grandfather old restoration point if no virtues
+    // Fallback if the vrest backfill hasn't run: an old restoration point (self=true)
+    // with no virtues becomes the Restoration toggle.
+    if (!e.vrest && !!r.self && !e.vind && !e.vsin && !e.vtrq) e.vrest = true;
     e.self = selfDone(e);
     return e;
   }
@@ -793,11 +796,11 @@
       user_id: session.user.id, day: day,
       money: !!e.money, family: !!e.family,
       hmove: !!e.hmove, heat: !!e.heat, hsleep: !!e.hsleep, health: healthDone(e),
-      vind: !!e.vind, vsin: !!e.vsin, vtrq: !!e.vtrq, self: selfDone(e),
+      vind: !!e.vind, vsin: !!e.vsin, vtrq: !!e.vtrq, vrest: !!e.vrest, self: selfDone(e),
       updated_at: new Date(e.updated_at || Date.now()).toISOString()
     };
   }
-  function hasData(e) { return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.family || e.vind || e.vsin || e.vtrq || e.selfg)); }
+  function hasData(e) { return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.family || e.vind || e.vsin || e.vtrq || e.vrest)); }
 
   function pushDay(day) {
     if (!sb || !session) return;
@@ -814,7 +817,7 @@
     if (!sb || !session || syncing) return;
     syncing = true;
     setPill("busy", "Syncing…");
-    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,updated_at")
+    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,vrest,updated_at")
       .then(function (res) {
         if (res.error) { setPill("err", "Sync error"); syncing = false; return; }
         var remote = {};
