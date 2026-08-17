@@ -140,6 +140,47 @@
 
   footer { margin-top: 40px; text-align: center; color: var(--faint); font-size: 12px; line-height: 1.7; }
   footer .big { color: var(--muted); }
+
+  /* Sync / auth */
+  .syncrow { display: flex; justify-content: flex-end; margin: -6px 0 18px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 999px; padding: 6px 13px; font-size: 12.5px; transition: all .15s ease;
+  }
+  .pill:hover { color: var(--text); border-color: #33404f; }
+  .pill .st { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .pill.synced { color: var(--done); border-color: rgba(63,185,80,0.35); }
+  .pill.synced .st { background: var(--done); box-shadow: 0 0 8px rgba(63,185,80,.5); }
+  .pill.busy .st { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .pill.err .st { background: #db6d6d; }
+
+  .auth-panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; margin: 0 0 20px; box-shadow: var(--shadow); display: none;
+  }
+  .auth-panel.open { display: block; }
+  .auth-panel h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+  .auth-panel p { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); }
+  .auth-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .auth-panel input[type=email] {
+    flex: 1; min-width: 180px; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 9px; padding: 10px 12px; font-size: 14px; outline: none;
+  }
+  .auth-panel input[type=email]:focus { border-color: var(--money); }
+  .btn {
+    background: var(--accent); color: #241a04; border: none; border-radius: 9px;
+    padding: 10px 16px; font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
+  .btn.ghost:hover { color: var(--text); }
+  .auth-msg { font-size: 12.5px; margin-top: 10px; min-height: 16px; }
+  .auth-msg.ok { color: var(--done); }
+  .auth-msg.bad { color: #e08a8a; }
+  .auth-who { font-size: 13px; color: var(--muted); }
+  .auth-who b { color: var(--text); }
 </style>
 </head>
 <body>
@@ -151,6 +192,12 @@
     </div>
     <div class="tagline">Four points a day. Target is 20 a week — not 28. That number is the whole system.</div>
   </header>
+
+  <div class="syncrow">
+    <span class="pill" id="syncPill"><span class="st"></span><span id="syncText">Sync across devices</span></span>
+  </div>
+
+  <section class="auth-panel" id="authPanel"></section>
 
   <section class="week">
     <div class="week-top">
@@ -186,12 +233,18 @@
   </footer>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function () {
   "use strict";
 
   var STORE = "compounder.v1";
   var TARGET = 20;
+
+  // ---- Supabase config ----
+  var SB_URL = "https://qgovfymvmhcqlpmwdddw.supabase.co";
+  var SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnb3ZmeW12bWhjcWxwbXdkZGR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MjY3NDYsImV4cCI6MjEwMjUwMjc0Nn0.v8Mku_aLV-Dkg-z_bkCE7E_FeqVWzE9ohSMug5BILFg";
+  var sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_ANON) : null;
 
   var DOMAINS = [
     { key: "money",  name: "Money",  move: "One 15-min deliberate action — fund the Roth, write one thesis paragraph, one advisory outreach, one position reconciled. Checking your P&L does not count.", scored: "Done / not" },
@@ -274,9 +327,11 @@
   function toggle(key) {
     var e = dayEntry(todayKey);
     e[key] = !e[key];
+    e.updated_at = Date.now();
     data[todayKey] = e;
     save(data);
     renderAll();
+    pushDay(todayKey); // sync this day if signed in
   }
 
   // ---- render: today score pips ----
@@ -376,8 +431,194 @@
   // If the app was left open past midnight, refresh "today" on focus.
   window.addEventListener("focus", function () {
     var nk = ymd(new Date());
-    if (nk !== todayKey) location.reload();
+    if (nk !== todayKey) { location.reload(); return; }
+    if (session) sync(); // pull any changes made on other devices
   });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && session) sync();
+  });
+
+  // ======================= Supabase auth + sync =======================
+  var session = null;          // current auth session, or null
+  var syncing = false;
+
+  var pillEl = document.getElementById("syncPill");
+  var syncTextEl = document.getElementById("syncText");
+  var panelEl = document.getElementById("authPanel");
+
+  function setPill(state, text) {
+    pillEl.className = "pill" + (state ? " " + state : "");
+    syncTextEl.textContent = text;
+  }
+
+  // Toggle the auth panel open/closed when the pill is clicked.
+  pillEl.addEventListener("click", function () {
+    if (!sb) return;
+    panelEl.classList.toggle("open");
+    if (panelEl.classList.contains("open")) renderAuthPanel();
+  });
+
+  function renderAuthPanel() {
+    if (session) {
+      panelEl.innerHTML =
+        '<div class="auth-row" style="justify-content:space-between;align-items:center">' +
+          '<span class="auth-who">Signed in as <b>' + escapeHtml(session.user.email) + '</b></span>' +
+          '<button class="btn ghost" id="signOutBtn">Sign out</button>' +
+        '</div>' +
+        '<div class="auth-msg ok" id="authMsg">Your four-a-day syncs to every device you sign in on.</div>';
+      document.getElementById("signOutBtn").addEventListener("click", doSignOut);
+    } else {
+      panelEl.innerHTML =
+        '<h3>Sync across devices</h3>' +
+        '<p>Enter your email and we’ll send a one-time login link. Open it on any device to see the same board.</p>' +
+        '<div class="auth-row">' +
+          '<input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email" />' +
+          '<button class="btn" id="sendLinkBtn">Email me a link</button>' +
+        '</div>' +
+        '<div class="auth-msg" id="authMsg"></div>';
+      var input = document.getElementById("emailInput");
+      var btn = document.getElementById("sendLinkBtn");
+      btn.addEventListener("click", function () { sendLink(input.value.trim(), btn); });
+      input.addEventListener("keydown", function (e) { if (e.key === "Enter") sendLink(input.value.trim(), btn); });
+      input.focus();
+    }
+  }
+
+  function authMsg(text, kind) {
+    var m = document.getElementById("authMsg");
+    if (m) { m.textContent = text; m.className = "auth-msg" + (kind ? " " + kind : ""); }
+  }
+
+  function sendLink(email, btn) {
+    if (!sb) return;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { authMsg("Enter a valid email address.", "bad"); return; }
+    btn.disabled = true;
+    authMsg("Sending…");
+    var redirect = location.origin + location.pathname;
+    sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: redirect } })
+      .then(function (res) {
+        btn.disabled = false;
+        if (res.error) { authMsg(res.error.message, "bad"); }
+        else { authMsg("Check " + email + " for a login link, then open it on this device.", "ok"); }
+      })
+      .catch(function (err) { btn.disabled = false; authMsg(String(err && err.message || err), "bad"); });
+  }
+
+  function doSignOut() {
+    if (!sb) return;
+    sb.auth.signOut().then(function () {
+      panelEl.classList.remove("open");
+      // local data stays on this device so the app still works offline
+    });
+  }
+
+  // ---- sync engine (last-write-wins per day) ----
+  function entryFromRow(r) {
+    return {
+      money: !!r.money, health: !!r.health, family: !!r.family, self: !!r.self,
+      updated_at: r.updated_at ? Date.parse(r.updated_at) : 0
+    };
+  }
+  function rowFromEntry(day, e) {
+    return {
+      user_id: session.user.id, day: day,
+      money: !!e.money, health: !!e.health, family: !!e.family, self: !!e.self,
+      updated_at: new Date(e.updated_at || Date.now()).toISOString()
+    };
+  }
+  function hasData(e) { return e && (e.money || e.health || e.family || e.self); }
+
+  function pushDay(day) {
+    if (!sb || !session) return;
+    var e = data[day]; if (!e) return;
+    sb.from("days").upsert(rowFromEntry(day, e), { onConflict: "user_id,day" })
+      .then(function (res) {
+        if (res.error) setPill("err", "Sync error");
+        else if (!syncing) setPill("synced", "Synced");
+      })
+      .catch(function () { setPill("err", "Offline"); });
+  }
+
+  function sync() {
+    if (!sb || !session || syncing) return;
+    syncing = true;
+    setPill("busy", "Syncing…");
+    sb.from("days").select("day,money,health,family,self,updated_at")
+      .then(function (res) {
+        if (res.error) { setPill("err", "Sync error"); syncing = false; return; }
+        var remote = {};
+        (res.data || []).forEach(function (r) { remote[r.day] = entryFromRow(r); });
+
+        var days = {};
+        Object.keys(data).forEach(function (d) { days[d] = 1; });
+        Object.keys(remote).forEach(function (d) { days[d] = 1; });
+
+        var toPush = [];
+        Object.keys(days).forEach(function (d) {
+          var l = data[d], r = remote[d];
+          var lu = (l && l.updated_at) || 0;
+          var ru = (r && r.updated_at) || 0;
+          if (lu > ru) {
+            if (hasData(l) || r) toPush.push(rowFromEntry(d, l)); // send local-newer up
+          } else if (ru > lu) {
+            data[d] = r; // pull remote-newer down
+          }
+        });
+        save(data);
+        renderAll();
+
+        if (toPush.length) {
+          sb.from("days").upsert(toPush, { onConflict: "user_id,day" })
+            .then(function (r2) {
+              syncing = false;
+              setPill(r2.error ? "err" : "synced", r2.error ? "Sync error" : "Synced");
+            })
+            .catch(function () { syncing = false; setPill("err", "Offline"); });
+        } else {
+          syncing = false;
+          setPill("synced", "Synced");
+        }
+      })
+      .catch(function () { syncing = false; setPill("err", "Offline"); });
+  }
+
+  function onAuth(newSession) {
+    session = newSession || null;
+    if (session) {
+      setPill("busy", "Syncing…");
+      sync();
+    } else {
+      setPill("", "Sync across devices");
+    }
+    if (panelEl.classList.contains("open")) renderAuthPanel();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // Normalize any legacy entries (pre-sync) so they carry a timestamp and
+  // will be pushed up on first sign-in.
+  (function migrateLocal() {
+    var changed = false;
+    Object.keys(data).forEach(function (d) {
+      var e = data[d];
+      if (e && typeof e.updated_at !== "number") {
+        e.updated_at = hasData(e) ? Date.now() : 0;
+        changed = true;
+      }
+    });
+    if (changed) save(data);
+  })();
+
+  if (sb) {
+    sb.auth.getSession().then(function (res) { onAuth(res.data && res.data.session); });
+    sb.auth.onAuthStateChange(function (_evt, s) { onAuth(s); });
+  } else {
+    setPill("err", "Sync unavailable");
+  }
 
   renderAll();
 })();
