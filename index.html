@@ -252,14 +252,13 @@
 
   /* Per-item notes (non-intrusive) */
   .notewrap { margin-top: 5px; }
-  .note-item { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
-  .note-add { display: block; background: none; border: none; color: var(--faint); font-size: 11.5px; cursor: pointer; padding: 1px 0; }
+  .note-item { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+  .note-item::before { content: "•"; color: var(--accent); flex: 0 0 auto; font-weight: 700; }
+  .note-add { display: block; background: none; border: none; color: var(--faint); font-size: 12px; cursor: pointer; padding: 3px 0 1px; }
   .note-add:hover { color: var(--muted); }
-  .note-del { background: none; border: none; color: var(--faint); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 3px; flex: 0 0 auto; }
+  .note-del { background: none; border: none; color: var(--faint); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 3px; flex: 0 0 auto; margin-left: auto; }
   .note-del:hover { color: #db6d6d; }
-  .note-line { font-size: 12px; color: var(--muted); font-style: italic; cursor: text; }
-  .note-line::before { content: "\201C"; }
-  .note-line::after { content: "\201D"; }
+  .note-line { flex: 1; font-size: 13.5px; color: var(--text); cursor: text; }
   .note-input { width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 13px; font-family: inherit; outline: none; }
   .note-input:focus { border-color: var(--accent); }
   .grid tr.total td { padding-top: 9px; font-variant-numeric: tabular-nums; color: var(--muted); }
