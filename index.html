@@ -486,6 +486,7 @@
   var sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_ANON) : null;
 
   var DOMAINS = [
+    { key: "hard",   name: "Comfort Zone", short: "Comfort", word: "Push", move: "One hard thing you'd rather avoid — the dreaded workout, the awkward call, the cold outreach. Leave the comfort zone.", scored: "Done / not" },
     { key: "money",  name: "Money",  word: "Build",    move: "One 15-minute move that compounds — fund the account, write a page of the thesis, one real outreach, one position reconciled. Watching the market doesn't count.", scored: "Moved / didn't" },
     { key: "health", name: "Health", scored: "2 of 3 — win on a bad day", subs: [
       { key: "hmove",  name: "Move",  hint: "Zone 2, a lift, or 8K steps. On purpose." },
@@ -498,8 +499,7 @@
       { key: "vsin",  name: "Sincerity",   hint: "Honest and clean-tongued. No deceit, no idle harm." },
       { key: "vtrq",  name: "Soft Skills", hint: "Sharpened a soft skill — public speaking, music, dance, improv, or networking." },
       { key: "vrest", name: "Restoration", hint: "30 min of chosen nothing. Not the feed." }
-    ] },
-    { key: "hard",   name: "Comfort Zone", short: "Comfort", word: "Push", move: "One hard thing you'd rather avoid — the dreaded workout, the awkward call, the cold outreach. Leave the comfort zone.", scored: "Done / not" }
+    ] }
   ];
   var DAILY_MAX = DOMAINS.length;   // one point per domain
   var WEEK_MAX = DAILY_MAX * 7;
