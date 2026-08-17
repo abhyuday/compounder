@@ -405,6 +405,17 @@
   .who-meta { min-width: 0; }
   .who-name { font-size: 15px; font-weight: 600; color: var(--text); }
   .who-email { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .reminders { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .rem-hd { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+  .rem-times { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .rem-chip { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .rem-chip.on { color: var(--text); border-color: rgba(63,185,80,0.45); }
+  .rem-chip input { accent-color: var(--done); margin: 0; }
+  .rem-note { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+  .rem-note.ok { color: var(--done); }
+  .rem-msg { font-size: 12px; margin-top: 8px; min-height: 14px; color: var(--muted); }
+  .rem-msg.ok { color: var(--done); }
+  .rem-msg.bad { color: #e08a8a; }
 
   /* ---------------- Mobile ---------------- */
   @media (max-width: 640px) {
@@ -517,6 +528,9 @@
   var SB_URL = "https://qgovfymvmhcqlpmwdddw.supabase.co";
   var SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnb3ZmeW12bWhjcWxwbXdkZGR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MjY3NDYsImV4cCI6MjEwMjUwMjc0Nn0.v8Mku_aLV-Dkg-z_bkCE7E_FeqVWzE9ohSMug5BILFg";
   var sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_ANON) : null;
+  var VAPID_PUBLIC = "BMkQUlk5kIZGlRjhrO8ng-iWUrmi3Kjx6s3LLDxeYd6ZB5Zh0-vStYfUbozUi8d7ekJydU7oXYnEJBhm0Y0HFVM";
+  // Reminder time presets (local hours) → the app stores their UTC equivalents for the cron.
+  var REMINDER_KINDS = [{ kind: "morning", hour: 8, label: "Morning" }, { kind: "midday", hour: 13, label: "Midday" }, { kind: "evening", hour: 21, label: "Evening" }];
 
   var DOMAINS = [
     { key: "hard",   name: "Comfort Zone", short: "Comfort", word: "Push", move: "One hard thing you'd rather avoid — the dreaded workout, the awkward call, the cold outreach. Leave the comfort zone.", scored: "Done / not" },
@@ -1459,12 +1473,14 @@
           '</div>' +
         '</div>' +
         '<div class="auth-msg ok" id="authMsg">Synced to your account on every device you sign in on.</div>' +
+        remindersHtml() +
         '<div class="auth-row" style="margin-top:14px">' +
           '<button class="btn ghost" id="switchBtn">Switch account</button>' +
           '<button class="btn ghost" id="signOutBtn">Sign out</button>' +
         '</div>';
       document.getElementById("signOutBtn").addEventListener("click", function () { doSignOut(false); });
       document.getElementById("switchBtn").addEventListener("click", switchAccount);
+      wireReminders();
     } else {
       panelEl.innerHTML =
         '<h3>Sync across devices</h3>' +
@@ -1515,6 +1531,103 @@
 
   // Sign out and immediately reopen the login panel to log in as someone else.
   function switchAccount() { doSignOut(true); }
+
+  // ======================= Push reminders =======================
+  var pushSupported = ("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window);
+  var reminderPrefs = [];   // enabled kinds, e.g. ["morning","evening"]
+  var pushEnabled = false;  // permission granted + active subscription
+  function urlB64ToU8(b64) {
+    var pad = "=".repeat((4 - b64.length % 4) % 4);
+    var s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+    var raw = atob(s), arr = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+  }
+  function reRenderReminders() {
+    var rem = document.getElementById("remBlock");
+    if (rem && session && panelEl.classList.contains("open")) { rem.outerHTML = remindersHtml(); wireReminders(); }
+  }
+  function loadReminderPrefs() {
+    reminderPrefs = []; pushEnabled = false;
+    if (sb && session) {
+      sb.from("user_settings").select("reminders").eq("user_id", session.user.id).maybeSingle()
+        .then(function (res) {
+          var r = res && res.data && res.data.reminders;
+          if (Array.isArray(r)) reminderPrefs = r.map(function (x) { return x.kind; });
+          reRenderReminders();
+        }, function () {});
+    }
+    if (pushSupported) {
+      navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); })
+        .then(function (sub) { pushEnabled = (Notification.permission === "granted") && !!sub; reRenderReminders(); })
+        .catch(function () {});
+    }
+  }
+  function remindersHtml() {
+    if (!pushSupported) {
+      return '<div class="reminders" id="remBlock"><div class="rem-hd">🔔 Reminders</div>' +
+        '<div class="rem-note">Not available in this browser. On iPhone, add Compounder to your Home Screen and open it from there first.</div></div>';
+    }
+    var chips = REMINDER_KINDS.map(function (k) {
+      var on = reminderPrefs.indexOf(k.kind) !== -1;
+      return '<label class="rem-chip' + (on ? " on" : "") + '"><input type="checkbox" data-rk="' + k.kind + '"' + (on ? " checked" : "") + '>' +
+        k.label + ' · ' + k.hour + ':00</label>';
+    }).join("");
+    var action = pushEnabled
+      ? '<div class="rem-note ok">Reminders are on for this device.</div><button class="btn ghost" id="remOff">Turn off</button>'
+      : '<button class="btn" id="remEnable">Enable reminders</button>';
+    return '<div class="reminders" id="remBlock"><div class="rem-hd">🔔 Reminders</div>' +
+      '<div class="rem-times">' + chips + '</div>' + action + '<div class="rem-msg" id="remMsg"></div></div>';
+  }
+  function wireReminders() {
+    var enable = document.getElementById("remEnable"); if (enable) enable.addEventListener("click", enableReminders);
+    var off = document.getElementById("remOff"); if (off) off.addEventListener("click", disableReminders);
+    Array.prototype.forEach.call(document.querySelectorAll('#remBlock [data-rk]'), function (cb) {
+      cb.addEventListener("change", function () {
+        var kind = cb.getAttribute("data-rk"), i = reminderPrefs.indexOf(kind);
+        if (cb.checked && i === -1) reminderPrefs.push(kind);
+        if (!cb.checked && i !== -1) reminderPrefs.splice(i, 1);
+        cb.parentNode.classList.toggle("on", cb.checked);
+        if (pushEnabled) saveReminderPrefs();
+      });
+    });
+  }
+  function remMsg(text, cls) { var m = document.getElementById("remMsg"); if (m) { m.textContent = text; m.className = "rem-msg" + (cls ? " " + cls : ""); } }
+  function reminderRows() {
+    var off = new Date().getTimezoneOffset();
+    return REMINDER_KINDS.filter(function (k) { return reminderPrefs.indexOf(k.kind) !== -1; })
+      .map(function (k) { return { kind: k.kind, hour: k.hour, utc: (((k.hour + Math.round(off / 60)) % 24) + 24) % 24 }; });
+  }
+  function saveReminderPrefs() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert({ user_id: session.user.id, reminders: reminderRows() }, { onConflict: "user_id" }).then(function () {}, function () {});
+  }
+  function enableReminders() {
+    if (!pushSupported) return;
+    remMsg("Requesting permission…");
+    Notification.requestPermission().then(function (perm) {
+      if (perm !== "granted") { remMsg("Notifications are blocked. Allow them for this site in your browser settings.", "bad"); return; }
+      if (!reminderPrefs.length) reminderPrefs = ["morning", "evening"];
+      navigator.serviceWorker.ready.then(function (reg) {
+        return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(VAPID_PUBLIC) });
+      }).then(function (sub) {
+        return sb.from("push_subscriptions").upsert({ endpoint: sub.endpoint, user_id: session.user.id, subscription: sub.toJSON() }, { onConflict: "endpoint" });
+      }).then(function (res) {
+        if (res && res.error) { remMsg(res.error.message + " (did you run the push_subscriptions migration?)", "bad"); return; }
+        saveReminderPrefs(); pushEnabled = true; remMsg("Reminders on 🔔", "ok"); reRenderReminders();
+      }).catch(function (err) { remMsg(String(err && err.message || err), "bad"); });
+    });
+  }
+  function disableReminders() {
+    remMsg("Turning off…");
+    navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
+      var endpoint = sub && sub.endpoint;
+      return (sub ? sub.unsubscribe() : Promise.resolve()).then(function () {
+        if (endpoint && sb && session) return sb.from("push_subscriptions").delete().eq("endpoint", endpoint);
+      });
+    }).then(function () { pushEnabled = false; remMsg("Reminders off."); reRenderReminders(); })
+      .catch(function (err) { remMsg(String(err && err.message || err), "bad"); });
+  }
 
   // ---- sync engine (last-write-wins per day) ----
   function entryFromRow(r) {
@@ -1642,6 +1755,7 @@
     data = load(); // reload the board for the now-current scope (this user, or anon)
     onAuthSchedule(); // reload + reconcile the schedule for this account
     onAuthRewards();  // reload + reconcile the rewards catalog for this account
+    loadReminderPrefs();
     if (session) {
       claimAnonBoard();
       setPill("busy", "Syncing…");
