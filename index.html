@@ -152,6 +152,35 @@
   .cell.future { opacity: .4; }
   .grid td.sel-col { background: rgba(88,166,255,0.10); border-radius: 4px; }
   .grid th.sel-col { color: var(--money); }
+  .hcell { display: inline-flex; gap: 2px; align-items: center; justify-content: center; }
+  .hcell.selectday { cursor: pointer; }
+  .hcell.future { opacity: .4; }
+  .hseg { width: 4px; height: 14px; border-radius: 2px; background: var(--panel-2); border: 1px solid var(--border); }
+  .hseg.on { background: var(--health); border-color: var(--health); }
+  .hcell.selectday:hover .hseg { border-color: #4a5a6b; }
+
+  /* Health sub-toggles */
+  .card.health .card-head { align-items: center; }
+  .status.perfect { color: var(--accent) !important; }
+  .subs { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .sub {
+    display: flex; align-items: center; gap: 11px; cursor: pointer; padding: 9px 11px;
+    border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border);
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .sub:hover { border-color: #33404f; }
+  .sub.on { background: var(--done-soft); border-color: rgba(63,185,80,0.4); }
+  .subcheck {
+    flex: 0 0 auto; width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--border);
+    background: var(--panel); display: grid; place-items: center; transition: all .15s ease;
+  }
+  .sub.on .subcheck { background: var(--done); border-color: var(--done); }
+  .subcheck svg { width: 13px; height: 13px; stroke: #0e1116; stroke-width: 3.2; fill: none; opacity: 0; transform: scale(.6); transition: all .15s ease; }
+  .sub.on .subcheck svg { opacity: 1; transform: scale(1); }
+  .subtext { display: flex; flex-direction: column; line-height: 1.25; }
+  .subname { font-size: 14px; font-weight: 600; color: var(--text); }
+  .subhint { font-size: 12px; color: var(--muted); }
+  .card.health .scored { padding-left: 0; }
   .grid tr.total td { padding-top: 9px; font-variant-numeric: tabular-nums; color: var(--muted); }
   .grid tr.total td.tt { font-weight: 700; color: var(--text); }
   .grid td.today-col { background: rgba(217,164,65,0.07); border-radius: 4px; }
@@ -297,10 +326,17 @@
 
   var DOMAINS = [
     { key: "money",  name: "Money",  move: "One 15-min deliberate action — fund the Roth, write one thesis paragraph, one advisory outreach, one position reconciled. Checking your P&L does not count.", scored: "Done / not" },
-    { key: "health", name: "Health", move: "One of: zone 2, lift, or 8K steps — plus lights-out by your target time.", scored: "Done / not" },
+    { key: "health", name: "Health", scored: "2 of 3 counts", subs: [
+      { key: "hmove",  name: "Move",  hint: "Zone 2, a lift, or 8K steps" },
+      { key: "heat",   name: "Eat",   hint: "One clean choice — protein in, junk out" },
+      { key: "hsleep", name: "Sleep", hint: "Lights-out by your target time" }
+    ] },
     { key: "family", name: "Family", move: "One defended block with a specific person, phone in another room.", scored: "Block happened / didn't" },
     { key: "self",   name: "Self",   move: "30 minutes with zero ROI — a film, a book, a walk.", scored: "Happened / didn't" }
   ];
+  var HEALTH_SUBS = ["hmove", "heat", "hsleep"];
+  function healthCount(e) { return HEALTH_SUBS.reduce(function (n, k) { return n + (e && e[k] ? 1 : 0); }, 0); }
+  function healthDone(e) { return healthCount(e) >= 2; }
 
   // ---- storage (scoped per account, so different users don't mix) ----
   var ANON_KEY = STORE;                 // board used when signed out
@@ -313,7 +349,12 @@
   function normalize(d) {
     Object.keys(d).forEach(function (day) {
       var e = d[day];
-      if (e && typeof e.updated_at !== "number") e.updated_at = hasData(e) ? Date.now() : 0;
+      if (!e) return;
+      // Back-fill Health sub-flags from the legacy single "health" flag.
+      // The old rule was "one workout PLUS lights-out" → Move + Sleep.
+      if (typeof e.hmove !== "boolean") { e.hmove = !!e.health; e.hsleep = !!e.health; e.heat = false; }
+      e.health = healthDone(e); // keep the derived point in sync
+      if (typeof e.updated_at !== "number") e.updated_at = hasData(e) ? Date.now() : 0;
     });
     return d;
   }
@@ -349,11 +390,11 @@
   }
 
   function dayEntry(key) {
-    return data[key] || { money: false, health: false, family: false, self: false };
+    return data[key] || { money: false, hmove: false, heat: false, hsleep: false, health: false, family: false, self: false };
   }
   function dayPoints(key) {
     var e = data[key]; if (!e) return 0;
-    return (e.money?1:0) + (e.health?1:0) + (e.family?1:0) + (e.self?1:0);
+    return (e.money?1:0) + (healthDone(e)?1:0) + (e.family?1:0) + (e.self?1:0);
   }
   function weekPoints(monday) {
     var t = 0;
@@ -375,30 +416,60 @@
     var e = dayEntry(selectedKey);
     cardsEl.innerHTML = "";
     DOMAINS.forEach(function (dom) {
-      var on = !!e[dom.key];
       var card = document.createElement("div");
-      card.className = "card" + (on ? " done" : "");
       card.setAttribute("data-domain", dom.key);
-      card.innerHTML =
-        '<div class="card-head">' +
-          '<div class="check">' + checkSVG + '</div>' +
-          '<div class="flex-title">' +
-            '<div class="domain">' + dom.name + '</div>' +
-            '<div class="move">' + dom.move + '</div>' +
+
+      if (dom.subs) {
+        // Health: three sub-toggles, point earned at 2 of 3.
+        var cnt = healthCount(e);
+        var done = cnt >= 2;
+        var perfect = cnt === 3;
+        card.className = "card health" + (done ? " done" : "");
+        var status = perfect ? "Perfect" : (done ? "Done" : (cnt + " / 3"));
+        card.innerHTML =
+          '<div class="card-head">' +
+            '<div class="flex-title"><div class="domain">' + dom.name + '</div></div>' +
+            '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
           '</div>' +
-          '<div class="status">' + (on ? "Done" : "Not yet") + '</div>' +
-        '</div>' +
-        '<div class="scored">' + dom.scored + '</div>';
-      card.addEventListener("click", function () { setDomain(selectedKey, dom.key); });
+          '<div class="subs">' +
+            dom.subs.map(function (s) {
+              return '<div class="sub' + (e[s.key] ? " on" : "") + '" data-sub="' + s.key + '">' +
+                       '<div class="subcheck">' + checkSVG + '</div>' +
+                       '<div class="subtext"><span class="subname">' + s.name + '</span>' +
+                         '<span class="subhint">' + s.hint + '</span></div>' +
+                     '</div>';
+            }).join("") +
+          '</div>' +
+          '<div class="scored">' + dom.scored + '</div>';
+        Array.prototype.forEach.call(card.querySelectorAll(".sub"), function (el) {
+          el.addEventListener("click", function () { setDomain(selectedKey, el.getAttribute("data-sub")); });
+        });
+      } else {
+        var on = !!e[dom.key];
+        card.className = "card" + (on ? " done" : "");
+        card.innerHTML =
+          '<div class="card-head">' +
+            '<div class="check">' + checkSVG + '</div>' +
+            '<div class="flex-title">' +
+              '<div class="domain">' + dom.name + '</div>' +
+              '<div class="move">' + dom.move + '</div>' +
+            '</div>' +
+            '<div class="status">' + (on ? "Done" : "Not yet") + '</div>' +
+          '</div>' +
+          '<div class="scored">' + dom.scored + '</div>';
+        card.addEventListener("click", function () { setDomain(selectedKey, dom.key); });
+      }
       cardsEl.appendChild(card);
     });
   }
 
-  // Toggle one domain on a given day. Never allows a future day.
+  // Toggle one field on a given day. Handles simple domains and Health sub-flags.
+  // Never allows a future day.
   function setDomain(dayKey, key) {
     if (dayKey > todayKey) return;
     var e = dayEntry(dayKey);
     e[key] = !e[key];
+    if (HEALTH_SUBS.indexOf(key) !== -1) e.health = healthDone(e); // keep derived point in sync
     e.updated_at = Date.now();
     data[dayKey] = e;
     save(data);
@@ -484,9 +555,17 @@
         var d = addDays(viewMonday, i);
         var k = ymd(d);
         var future = d > today;
-        var on = !!dayEntry(k)[dom.key];
-        html += "<td class='" + colClass(k).trim() + "'><span class='cell " + (on ? "on" : "") +
-          (future ? " future" : " editable") + "' data-d='" + dom.key + "' data-day='" + k + "'></span></td>";
+        if (dom.subs) {
+          // Health: a 3-segment bar (move/eat/sleep). Click opens the day to edit.
+          var he = dayEntry(k);
+          var segs = HEALTH_SUBS.map(function (s) { return "<i class='hseg" + (he[s] ? " on" : "") + "'></i>"; }).join("");
+          html += "<td class='" + colClass(k).trim() + "'><span class='hcell " +
+            (future ? "future" : "selectday") + "' data-day='" + k + "' title='Open this day to edit'>" + segs + "</span></td>";
+        } else {
+          var on = !!dayEntry(k)[dom.key];
+          html += "<td class='" + colClass(k).trim() + "'><span class='cell " + (on ? "on" : "") +
+            (future ? " future" : " editable") + "' data-d='" + dom.key + "' data-day='" + k + "'></span></td>";
+        }
       }
       html += "</tr>";
     });
@@ -528,10 +607,13 @@
   });
 
   // Direct back-fill: click any editable grid cell to toggle that day/domain.
+  // Health is three sub-parts, so its cell opens the day in the cards instead.
   document.getElementById("grid").addEventListener("click", function (ev) {
-    var cell = ev.target.closest && ev.target.closest(".cell.editable");
-    if (!cell) return;
-    setDomain(cell.getAttribute("data-day"), cell.getAttribute("data-d"));
+    if (!ev.target.closest) return;
+    var cell = ev.target.closest(".cell.editable");
+    if (cell) { setDomain(cell.getAttribute("data-day"), cell.getAttribute("data-d")); return; }
+    var hcell = ev.target.closest(".hcell.selectday");
+    if (hcell) selectDay(hcell.getAttribute("data-day"));
   });
 
   document.getElementById("prevWeek").addEventListener("click", function () {
@@ -678,19 +760,24 @@
 
   // ---- sync engine (last-write-wins per day) ----
   function entryFromRow(r) {
-    return {
-      money: !!r.money, health: !!r.health, family: !!r.family, self: !!r.self,
+    var e = {
+      money: !!r.money, family: !!r.family, self: !!r.self,
+      hmove: !!r.hmove, heat: !!r.heat, hsleep: !!r.hsleep,
       updated_at: r.updated_at ? Date.parse(r.updated_at) : 0
     };
+    e.health = healthDone(e);
+    return e;
   }
   function rowFromEntry(day, e) {
     return {
       user_id: session.user.id, day: day,
-      money: !!e.money, health: !!e.health, family: !!e.family, self: !!e.self,
+      money: !!e.money, family: !!e.family, self: !!e.self,
+      hmove: !!e.hmove, heat: !!e.heat, hsleep: !!e.hsleep,
+      health: healthDone(e),
       updated_at: new Date(e.updated_at || Date.now()).toISOString()
     };
   }
-  function hasData(e) { return e && (e.money || e.health || e.family || e.self); }
+  function hasData(e) { return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.family || e.self)); }
 
   function pushDay(day) {
     if (!sb || !session) return;
@@ -707,7 +794,7 @@
     if (!sb || !session || syncing) return;
     syncing = true;
     setPill("busy", "Syncing…");
-    sb.from("days").select("day,money,health,family,self,updated_at")
+    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,updated_at")
       .then(function (res) {
         if (res.error) { setPill("err", "Sync error"); syncing = false; return; }
         var remote = {};
