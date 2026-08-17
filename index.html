@@ -120,6 +120,7 @@
   .be-box svg { width: 13px; height: 13px; stroke: #0e1116; stroke-width: 3.2; fill: none; opacity: 0; transform: scale(.6); transition: all .15s ease; }
   .be-toggle.on .be-box svg { opacity: 1; transform: scale(1); }
   .be-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .bookend .notewrap { margin-top: 7px; padding-left: 44px; }
 
   /* Day switcher */
   .dayswitch { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
@@ -867,13 +868,16 @@
   }
   function renderBookend() {
     var host = document.getElementById("bookend");
+    // Don't rebuild while the note is being typed (would steal focus).
+    if (document.activeElement && host.contains(document.activeElement) && document.activeElement.closest("[data-noteinput]")) return;
     var e = dayEntry(selectedKey);
     host.innerHTML =
       '<div class="bookend-top"><span class="ttl">Daily bookend</span><span class="bookend-streak" id="beStreak"></span></div>' +
       '<div class="be-toggle' + (e.hard ? " on" : "") + '" data-hard>' +
         '<span class="be-box">' + checkSVG + '</span>' +
         '<span class="be-label">What hard thing shall I do this day?</span>' +
-      '</div>';
+      '</div>' +
+      noteZone("hard", e);
     updateBookendMeta();
   }
 
@@ -916,13 +920,36 @@
   document.getElementById("bookend").addEventListener("focusout", function (ev) {
     if (ev.target.tagName === "TEXTAREA") pushDay(selectedKey);
   });
-  // The hard-thing yes/no toggle.
-  document.getElementById("bookend").addEventListener("click", function (ev) {
-    if (!(ev.target.closest && ev.target.closest("[data-hard]"))) return;
-    var e = dayEntry(selectedKey);
-    e.hard = !e.hard; e.updated_at = Date.now();
-    data[selectedKey] = e; save(data); pushDay(selectedKey);
+  // The hard-thing yes/no toggle + its note.
+  function openBookendNote(key) {
+    noteEditing = key;
     renderBookend();
+    var inp = document.getElementById("bookend").querySelector('[data-noteinput="' + key + '"]');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+  document.getElementById("bookend").addEventListener("click", function (ev) {
+    var noteBtn = ev.target.closest && ev.target.closest("[data-note]");
+    if (noteBtn) { openBookendNote(noteBtn.getAttribute("data-note")); return; }
+    if (ev.target.closest && ev.target.closest("[data-hard]")) {
+      var e = dayEntry(selectedKey);
+      e.hard = !e.hard; e.updated_at = Date.now();
+      data[selectedKey] = e; save(data); pushDay(selectedKey);
+      renderBookend();
+    }
+  });
+  document.getElementById("bookend").addEventListener("input", function (ev) {
+    var inp = ev.target.closest && ev.target.closest("[data-noteinput]"); if (!inp) return;
+    var en = dayEntry(selectedKey); en.notes = en.notes || {}; en.notes[inp.getAttribute("data-noteinput")] = inp.value;
+    en.updated_at = Date.now(); data[selectedKey] = en; save(data);
+  });
+  document.getElementById("bookend").addEventListener("focusout", function (ev) {
+    if (!(ev.target.closest && ev.target.closest("[data-noteinput]"))) return;
+    pushDay(selectedKey);
+    var closingKey = noteEditing;
+    setTimeout(function () { if (noteEditing === closingKey) { noteEditing = null; renderBookend(); } }, 0);
+  });
+  document.getElementById("bookend").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter" && ev.target.closest && ev.target.closest("[data-noteinput]")) ev.target.blur();
   });
 
   // Keep the "Now" block and bookend phase current through the day.
