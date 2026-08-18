@@ -501,6 +501,34 @@
   .review-saved b { color: var(--muted); }
   .hist-due { color: var(--accent); }
 
+  /* Goals (nested, decoupled from the point system) */
+  #goals .hist-sum { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+  .goal-body { padding: 6px 10px 12px; }
+  .goal-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-radius: 8px; }
+  .goal-row:hover { background: var(--panel-2); }
+  .goal-tw { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 10px; width: 18px; flex: 0 0 auto; padding: 2px; line-height: 1; }
+  .goal-tw:hover { color: var(--text); }
+  .goal-box { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--border); background: var(--panel-2); display: grid; place-items: center; cursor: pointer; padding: 0; transition: all .15s ease; }
+  .goal-box.on { background: var(--done); border-color: var(--done); }
+  .goal-box svg { width: 12px; height: 12px; stroke: #0e1116; stroke-width: 3.2; fill: none; }
+  .goal-title { flex: 1; font-size: 14px; color: var(--text); cursor: text; line-height: 1.3; word-break: break-word; }
+  .goal-title.done { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+  .goal-untitled { color: var(--faint); font-style: italic; }
+  .goal-prog { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+  .goal-in { flex: 1; background: var(--panel-2); border: 1px solid var(--money); color: var(--text); border-radius: 7px; padding: 5px 8px; font-size: 14px; font-family: inherit; outline: none; min-width: 0; }
+  .goal-acts { display: flex; gap: 2px; flex: 0 0 auto; opacity: .5; transition: opacity .12s ease; }
+  .goal-row:hover .goal-acts { opacity: 1; }
+  .goal-act { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 5px; }
+  .goal-act:hover { color: var(--text); }
+  .goal-add { display: block; background: none; border: none; color: var(--money); font-size: 13px; cursor: pointer; padding: 9px 6px 2px; }
+  .goal-add:hover { filter: brightness(1.15); }
+  .goal-empty { font-size: 13px; color: var(--faint); padding: 8px 6px; }
+  .goal-arch { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 6px; }
+  .goal-arch-hd { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 4px 6px; }
+  .goal-arch-hd:hover { color: var(--text); }
+  .goal-row.arch { opacity: .7; }
+  .goal-when { font-size: 11px; color: var(--faint); flex: 0 0 auto; }
+
   @media (display-mode: standalone) {
     /* A touch more breathing room when launched as an installed app */
     body { padding-top: calc(14px + env(safe-area-inset-top)); }
@@ -525,6 +553,8 @@
   <section class="sched" id="sched"></section>
 
   <section class="sched" id="rewards"></section>
+
+  <section class="sched" id="goals"></section>
 
   <section class="week">
     <div class="week-top">
@@ -854,7 +884,7 @@
   }
   function whyInputFocused() { return !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-whyinput]")); }
   function reviewInputFocused() { return !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-reviewinput]")); }
-  function anyEditorFocused() { return noteInputFocused() || whyInputFocused() || reviewInputFocused(); }
+  function anyEditorFocused() { return noteInputFocused() || whyInputFocused() || reviewInputFocused() || goalInputFocused(); }
   // Completed cards "recede" — collapse to a slim dimmed row so undone ones stand
   // out. Tap a collapsed card to reopen it; the ▴ collapses it again.
   var expandedCards = {};
@@ -1458,6 +1488,203 @@
   function onAuthReviews() { loadReviews(); if (session) syncReviews(); }
   loadReviews();
 
+  // ======================= Goals (nested, synced; decoupled from points) =======================
+  // A forest of goal nodes: { id, title, kids:[...], done, doneAt, archived(top-level), ts }.
+  // Completion is derived — a node with kids is done when all kids are; a leaf is
+  // done via its own checkbox. A top-level goal auto-archives when fully done.
+  var GOALS_KEY = "compounder.goals";
+  var goals = [];
+  var goalsTs = 0;
+  var goalsOpen = false, archivedOpen = false, goalEditing = null, goalCollapsed = {};
+  function goalsStoreKey() { return session ? (GOALS_KEY + "." + session.user.id) : GOALS_KEY; }
+  function loadGoals() {
+    var k = goalsStoreKey();
+    try { var a = JSON.parse(localStorage.getItem(k)); if (Array.isArray(a)) { goals = a; goalsTs = (+localStorage.getItem(k + ".ts")) || 0; return; } } catch (e) {}
+    goals = []; goalsTs = 0;
+  }
+  function persistGoals() {
+    var k = goalsStoreKey();
+    localStorage.setItem(k, JSON.stringify(goals));
+    localStorage.setItem(k + ".ts", String(goalsTs));
+  }
+  function saveGoals() { goalsTs = Date.now(); persistGoals(); pushGoals(); }
+  function pushGoals() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert(
+      { user_id: session.user.id, goals: goals, goals_updated_at: new Date(goalsTs || Date.now()).toISOString() },
+      { onConflict: "user_id" }
+    ).then(function () {}, function () {});
+  }
+  function syncGoals() {
+    if (!sb || !session) return;
+    sb.from("user_settings").select("goals,goals_updated_at").eq("user_id", session.user.id).maybeSingle()
+      .then(function (res) {
+        if (res.error) return; // column may not exist yet — silently skip
+        var r = res.data;
+        var rts = (r && r.goals_updated_at) ? Date.parse(r.goals_updated_at) : 0;
+        if (r && Array.isArray(r.goals) && rts > goalsTs) {
+          goals = r.goals; goalsTs = rts; persistGoals();
+          if (!goalInputFocused()) renderGoals();
+        } else if (goalsTs > rts && goals.length) {
+          pushGoals();
+        }
+      }, function () {});
+  }
+  function onAuthGoals() { loadGoals(); if (session) syncGoals(); }
+  loadGoals();
+
+  function genGoalId() { return "g" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function goalDone(g) {
+    if (g.kids && g.kids.length) return g.kids.every(goalDone);
+    return !!g.done;
+  }
+  function goalLeafStats(g) {
+    if (g.kids && g.kids.length) {
+      return g.kids.reduce(function (a, k) { var s = goalLeafStats(k); a.done += s.done; a.total += s.total; return a; }, { done: 0, total: 0 });
+    }
+    return { done: g.done ? 1 : 0, total: 1 };
+  }
+  // Locate a node by id, returning it with its containing array, index, and top-level ancestor.
+  function findGoal(id) {
+    var res = null;
+    (function walk(arr, top) {
+      for (var i = 0; i < arr.length && !res; i++) {
+        var n = arr[i], t = top || n;
+        if (n.id === id) { res = { node: n, parent: arr, index: i, top: t }; return; }
+        if (n.kids && n.kids.length) walk(n.kids, t);
+      }
+    })(goals, null);
+    return res;
+  }
+  function goalInputFocused() { return !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-ginput]")); }
+
+  function goalAdd(parentId) {
+    var node = { id: genGoalId(), title: "", kids: [], done: false, doneAt: null, ts: Date.now() };
+    if (parentId) {
+      var f = findGoal(parentId); if (!f) return;
+      f.node.kids = f.node.kids || [];
+      f.node.done = false; // becomes a container; its own flag no longer matters
+      f.node.kids.push(node);
+      goalCollapsed[parentId] = false;
+    } else {
+      node.archived = false;
+      goals.push(node);
+    }
+    goalEditing = node.id;
+    saveGoals();
+    renderGoals();
+  }
+  function goalCommitTitle(id, val) {
+    var f = findGoal(id); if (!f) { goalEditing = null; return; }
+    val = (val || "").trim();
+    if (val) f.node.title = val;
+    else if (!f.node.title && !(f.node.kids && f.node.kids.length)) f.parent.splice(f.index, 1); // cancel a blank new goal
+    goalEditing = null;
+    saveGoals();
+    renderGoals();
+  }
+  function goalCheck(id) {
+    var f = findGoal(id); if (!f) return;
+    var g = f.node;
+    if (g.kids && g.kids.length) return; // only leaves toggle
+    var wasDone = goalDone(f.top);
+    g.done = !g.done; g.doneAt = g.done ? Date.now() : null;
+    var nowDone = goalDone(f.top);
+    if (!f.top.archived && !wasDone && nowDone) { // top-level goal just completed → archive + celebrate
+      f.top.archived = true; f.top.doneAt = Date.now();
+      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+      showToast("🎯 Goal complete: " + f.top.title);
+    }
+    saveGoals();
+    renderGoals();
+  }
+  function goalDelete(id) {
+    var f = findGoal(id); if (!f) return;
+    if (!confirm('Delete "' + (f.node.title || "this goal") + '"' + (f.node.kids && f.node.kids.length ? " and everything under it?" : "?"))) return;
+    f.parent.splice(f.index, 1);
+    saveGoals();
+    renderGoals();
+  }
+  function goalRestore(id) {
+    var f = findGoal(id); if (!f) return;
+    f.node.archived = false; f.node.doneAt = null;
+    saveGoals();
+    renderGoals();
+  }
+  function goalRowHtml(g, depth) {
+    var hasKids = g.kids && g.kids.length;
+    var done = goalDone(g);
+    var collapsed = !!goalCollapsed[g.id];
+    var indent = Math.min(depth, 5) * 16;
+    var lead = hasKids
+      ? '<button class="goal-tw" data-gexp="' + g.id + '" aria-label="Expand">' + (collapsed ? "▸" : "▾") + '</button>'
+      : '<button class="goal-box' + (done ? " on" : "") + '" data-gcheck="' + g.id + '" aria-label="Toggle done">' + (done ? checkSVG : "") + '</button>';
+    var titleHtml = (goalEditing === g.id)
+      ? '<input class="goal-in" data-ginput="' + g.id + '" value="' + escapeHtml(g.title) + '" placeholder="What are you building toward?" maxlength="120">'
+      : '<span class="goal-title' + (done ? " done" : "") + '" data-gedit="' + g.id + '">' + (g.title ? escapeHtml(g.title) : '<span class="goal-untitled">Untitled</span>') + '</span>';
+    var meta = hasKids ? '<span class="goal-prog">' + goalLeafStats(g).done + "/" + goalLeafStats(g).total + '</span>' : "";
+    var row = '<div class="goal-row" style="padding-left:' + indent + 'px">' + lead + titleHtml + meta +
+      '<span class="goal-acts">' +
+        '<button class="goal-act" data-gsub="' + g.id + '" title="Add sub-goal">+</button>' +
+        '<button class="goal-act" data-gdel="' + g.id + '" title="Delete">×</button>' +
+      '</span></div>';
+    var kidsHtml = (hasKids && !collapsed) ? g.kids.map(function (k) { return goalRowHtml(k, depth + 1); }).join("") : "";
+    return row + kidsHtml;
+  }
+  function renderGoals() {
+    var host = document.getElementById("goals");
+    if (!host) return;
+    host.className = "sched" + (goalsOpen ? " open" : "");
+    var active = goals.filter(function (g) { return !g.archived; });
+    var archived = goals.filter(function (g) { return g.archived; });
+    var summary = active.length ? (active.length + " active") : (archived.length ? "all achieved 🎉" : "none yet");
+    var now = '<div class="sched-now" data-gact="toggle">' +
+      '<span class="rew-emoji">🎯</span><span class="lbl">Goals</span>' +
+      '<span class="hist-sum">' + summary + '</span><span class="chev">▾</span></div>';
+    var body = "";
+    if (goalsOpen) {
+      var list = active.length
+        ? active.map(function (g) { return goalRowHtml(g, 0); }).join("")
+        : '<div class="goal-empty">No goals yet. What are you building toward?</div>';
+      var arch = "";
+      if (archived.length) {
+        arch = '<div class="goal-arch"><button class="goal-arch-hd" data-garch>' + (archivedOpen ? "▾" : "▸") + " Achieved (" + archived.length + ")</button>" +
+          (archivedOpen ? '<div>' + archived.map(function (g) {
+            return '<div class="goal-row arch"><span class="goal-box on">' + checkSVG + '</span>' +
+              '<span class="goal-title done">' + (g.title ? escapeHtml(g.title) : "Untitled") + '</span>' +
+              '<span class="goal-when">' + (g.doneAt ? daysAgoLabel(ymd(new Date(g.doneAt))) : "") + '</span>' +
+              '<span class="goal-acts"><button class="goal-act" data-grestore="' + g.id + '" title="Restore">↺</button>' +
+              '<button class="goal-act" data-gdel="' + g.id + '" title="Delete">×</button></span></div>';
+          }).join("") + '</div>' : "") + '</div>';
+      }
+      body = '<div class="sched-body goal-body">' + list + '<button class="goal-add" data-gadd>+ Goal</button>' + arch + '</div>';
+    }
+    host.innerHTML = now + body;
+    if (goalsOpen && goalEditing) {
+      var gin = host.querySelector('[data-ginput]');
+      if (gin) {
+        gin.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter") { ev.preventDefault(); goalCommitTitle(gin.getAttribute("data-ginput"), gin.value); }
+          else if (ev.key === "Escape") { goalCommitTitle(gin.getAttribute("data-ginput"), gin.value); }
+        });
+        gin.addEventListener("blur", function () { goalCommitTitle(gin.getAttribute("data-ginput"), gin.value); });
+        gin.focus(); gin.setSelectionRange(gin.value.length, gin.value.length);
+      }
+    }
+  }
+  document.getElementById("goals").addEventListener("click", function (ev) {
+    var t = ev.target, el;
+    if ((el = t.closest("[data-gcheck]"))) { goalCheck(el.getAttribute("data-gcheck")); return; }
+    if ((el = t.closest("[data-gsub]"))) { goalAdd(el.getAttribute("data-gsub")); return; }
+    if ((el = t.closest("[data-gdel]"))) { goalDelete(el.getAttribute("data-gdel")); return; }
+    if ((el = t.closest("[data-gedit]"))) { goalEditing = el.getAttribute("data-gedit"); renderGoals(); return; }
+    if ((el = t.closest("[data-gexp]"))) { var id = el.getAttribute("data-gexp"); goalCollapsed[id] = !goalCollapsed[id]; renderGoals(); return; }
+    if ((el = t.closest("[data-grestore]"))) { goalRestore(el.getAttribute("data-grestore")); return; }
+    if (t.closest("[data-garch]")) { archivedOpen = !archivedOpen; renderGoals(); return; }
+    if (t.closest("[data-gadd]")) { goalAdd(null); return; }
+    if (t.closest("[data-gact]")) { goalsOpen = !goalsOpen; renderGoals(); return; }
+  });
+
   // ---- reward economy: spend today's earned points; nothing rolls over ----
   function buyReward(idx) {
     var r = rewardsCat[idx]; if (!r) return;
@@ -1757,6 +1984,7 @@
     renderGrid();
     if (!schedEditing) renderSchedule();
     if (!rewardsEditing) renderRewards();
+    if (!goalInputFocused()) renderGoals();
     if (!reviewInputFocused()) renderHistory();
   }
 
@@ -2192,6 +2420,7 @@
     onAuthRewards();  // reload + reconcile the rewards catalog for this account
     onAuthIdentity(); // reload + reconcile per-dimension identity lines
     onAuthReviews();  // reload + reconcile weekly reviews
+    onAuthGoals();    // reload + reconcile goals
     loadReminderPrefs();
     if (session) {
       claimAnonBoard();
