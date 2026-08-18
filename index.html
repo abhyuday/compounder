@@ -18,9 +18,9 @@
     --panel: #161b22;
     --panel-2: #1c232d;
     --border: #262e3a;
-    --text: #e6edf3;
-    --muted: #8b98a9;
-    --faint: #5c6773;
+    --text: #eaf0f6;
+    --muted: #a3afbf;
+    --faint: #8793a2;
     --done: #3fb950;
     --done-soft: rgba(63, 185, 80, 0.14);
     --accent: #d9a441;
@@ -95,7 +95,7 @@
   .card.collapsed:hover { opacity: .9; }
   .card.collapsed .card-head { align-items: center; }
   .mini-check { color: var(--done); font-weight: 700; margin-right: 8px; }
-  .card-collapse { flex: 0 0 auto; background: none; border: none; color: var(--faint); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; margin-left: 10px; }
+  .card-collapse { flex: 0 0 auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; font-weight: 700; line-height: 1; padding: 2px 4px; margin-left: 10px; }
   .card-collapse:hover { color: var(--text); }
   .toast {
     position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(12px);
@@ -148,7 +148,7 @@
   .blk .blabel { display: block; font-size: 13.5px; color: var(--text); font-weight: 600; }
   .blk .bnote { display: block; font-size: 12px; color: var(--muted); }
   .sched-actions { display: flex; gap: 14px; padding: 8px 12px 6px; }
-  .sched-actions .lnk { background: none; border: none; color: var(--accent); font-size: 12px; cursor: pointer; padding: 0; }
+  .sched-actions .lnk { background: none; border: none; color: var(--accent); font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0; }
   .sched-actions .lnk.muted { color: var(--muted); }
   .blk.edit { align-items: center; gap: 6px; flex-wrap: wrap; }
   .sched input { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 6px 8px; font-size: 12.5px; outline: none; }
@@ -156,7 +156,7 @@
   .blk.edit input[type=time] { width: 108px; flex: 0 0 auto; }
   .blk.edit .blabel-in { width: 118px; flex: 0 0 auto; }
   .blk.edit .bnote-in { flex: 1; min-width: 120px; }
-  .blk .del { background: none; border: none; color: #db6d6d; cursor: pointer; font-size: 13px; flex: 0 0 auto; }
+  .blk .del { background: none; border: none; color: #e57373; cursor: pointer; font-size: 15px; font-weight: 700; flex: 0 0 auto; }
 
   /* Rewards strip (reuses .sched chrome) */
   #rewards .rew-emoji { font-size: 15px; flex: 0 0 auto; }
@@ -170,7 +170,7 @@
   .rew-log { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--done); }
   .rew-logl { flex: 1; }
   .rew-logc { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .rew-undo { background: none; border: none; color: var(--faint); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; }
+  .rew-undo { background: none; border: none; color: var(--muted); font-size: 16px; font-weight: 700; line-height: 1; cursor: pointer; padding: 0 2px; }
   .rew-undo:hover { color: #db6d6d; }
   .rew-list { display: flex; flex-direction: column; gap: 6px; padding: 4px 8px; }
   .rew-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--border); }
@@ -336,9 +336,9 @@
   }
   .note-bullet:hover { color: var(--text); }
   .note-item.done .note-bullet { color: var(--done); }
-  .note-add { display: block; background: none; border: none; color: var(--faint); font-size: 12px; cursor: pointer; padding: 3px 0 1px; }
+  .note-add { display: block; background: none; border: none; color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 3px 0 1px; }
   .note-add:hover { color: var(--muted); }
-  .note-del { background: none; border: none; color: var(--faint); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 3px; flex: 0 0 auto; margin-left: auto; }
+  .note-del { background: none; border: none; color: var(--faint); font-size: 17px; font-weight: 700; line-height: 1; cursor: pointer; padding: 0 3px; flex: 0 0 auto; margin-left: auto; }
   .note-del:hover { color: #db6d6d; }
   .note-line { flex: 1; font-size: 13.5px; color: var(--text); cursor: text; }
   .note-item.done .note-line { text-decoration: line-through; text-decoration-color: var(--faint); color: var(--muted); }
@@ -459,7 +459,7 @@
   .card-why:hover { color: var(--text); }
   .why-in { width: 100%; margin-top: 4px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 9px; font-size: 13px; font-family: inherit; font-style: italic; outline: none; }
   .why-in:focus { border-color: var(--dc, var(--accent)); }
-  .why-add { display: inline-block; background: none; border: none; color: var(--faint); font-size: 12px; cursor: pointer; padding: 6px 0 0; }
+  .why-add { display: inline-block; background: none; border: none; color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 6px 0 0; }
   .why-add:hover { color: var(--muted); }
   .card-recall { font-size: 12px; color: var(--faint); margin-top: 8px; padding-left: 2px; border-left: 2px solid var(--border); padding-left: 9px; line-height: 1.4; }
   .card-recall b { color: var(--muted); font-weight: 600; font-style: normal; }
@@ -516,11 +516,11 @@
   .goal-untitled { color: var(--faint); font-style: italic; }
   .goal-prog { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
   .goal-in { flex: 1; background: var(--panel-2); border: 1px solid var(--money); color: var(--text); border-radius: 7px; padding: 5px 8px; font-size: 14px; font-family: inherit; outline: none; min-width: 0; }
-  .goal-acts { display: flex; gap: 2px; flex: 0 0 auto; opacity: .5; transition: opacity .12s ease; }
+  .goal-acts { display: flex; gap: 2px; flex: 0 0 auto; opacity: .85; transition: opacity .12s ease; }
   .goal-row:hover .goal-acts { opacity: 1; }
-  .goal-act { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 5px; }
+  .goal-act { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 17px; font-weight: 700; line-height: 1; padding: 2px 5px; }
   .goal-act:hover { color: var(--text); }
-  .goal-add { display: block; background: none; border: none; color: var(--money); font-size: 13px; cursor: pointer; padding: 9px 6px 2px; }
+  .goal-add { display: block; background: none; border: none; color: var(--money); font-size: 13.5px; font-weight: 600; cursor: pointer; padding: 9px 6px 2px; }
   .goal-add:hover { filter: brightness(1.15); }
   .goal-empty { font-size: 13px; color: var(--faint); padding: 8px 6px; }
   .goal-arch { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 6px; }
