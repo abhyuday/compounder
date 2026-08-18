@@ -89,6 +89,14 @@
   /* Focus "start here" marker + celebration toast */
   .start-here { display: inline-block; font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: #241a04; background: var(--accent); border-radius: 999px; padding: 2px 7px; margin-left: 6px; font-weight: 700; vertical-align: 1px; }
   .card.start { border-color: rgba(217,164,65,0.55); }
+
+  /* Completed cards recede to a slim, dimmed row */
+  .card.collapsed { padding: 12px 15px; opacity: .55; cursor: pointer; transition: opacity .15s ease; }
+  .card.collapsed:hover { opacity: .9; }
+  .card.collapsed .card-head { align-items: center; }
+  .mini-check { color: var(--done); font-weight: 700; margin-right: 8px; }
+  .card-collapse { flex: 0 0 auto; background: none; border: none; color: var(--faint); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; margin-left: 10px; }
+  .card-collapse:hover { color: var(--text); }
   .toast {
     position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(12px);
     background: var(--panel-2); border: 1px solid rgba(63,185,80,0.5); color: var(--text);
@@ -719,6 +727,14 @@
   function noteInputFocused() {
     return !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-noteinput]"));
   }
+  // Completed cards "recede" — collapse to a slim dimmed row so undone ones stand
+  // out. Tap a collapsed card to reopen it; the ▴ collapses it again.
+  var expandedCards = {};
+  function domainOfKey(key) {
+    if (HEALTH_SUBS.indexOf(key) !== -1) return "health";
+    if (SELF_SUBS.indexOf(key) !== -1) return "self";
+    return key;
+  }
   function renderCards() {
     var e = dayEntry(selectedKey);
     var recDom = (selectedKey === todayKey) ? recommendedDomain() : null; // "start here" pointer, today only
@@ -734,15 +750,30 @@
       var status = multi ? (perfect ? "Perfect" : (done ? "Done" : (cnt + " / " + rows.length)))
                          : (done ? "Done" : "Not yet");
       var startHere = (dom.key === recDom);
+      var collapsed = done && !expandedCards[dom.key] && selectedKey === todayKey;
 
       var card = document.createElement("div");
       card.setAttribute("data-domain", dom.key);
+
+      if (collapsed) {
+        card.className = "card subs-card collapsed " + dom.key + " done";
+        card.innerHTML =
+          '<div class="card-head">' +
+            '<div class="flex-title"><div class="domain"><span class="mini-check">✓</span>' + dom.name + '</div></div>' +
+            '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
+          '</div>';
+        card.addEventListener("click", function () { expandedCards[dom.key] = true; renderCards(); });
+        cardsEl.appendChild(card);
+        return;
+      }
+
       card.className = "card subs-card " + dom.key + (done ? " done" : "") + (startHere ? " start" : "");
       card.innerHTML =
         '<div class="card-head">' +
           '<div class="flex-title"><div class="domain">' + dom.name +
             (startHere ? ' <span class="start-here">start here</span>' : "") + '</div></div>' +
           '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
+          (done ? '<button class="card-collapse" data-collapse="' + dom.key + '" title="Collapse">▴</button>' : "") +
         '</div>' +
         '<div class="subs">' +
           rows.map(function (r) {
@@ -762,6 +793,8 @@
           setDomain(selectedKey, el.getAttribute("data-sub"));
         });
       });
+      var cbtn = card.querySelector("[data-collapse]");
+      if (cbtn) cbtn.addEventListener("click", function (ev) { ev.stopPropagation(); delete expandedCards[dom.key]; renderCards(); });
       cardsEl.appendChild(card);
     });
   }
@@ -851,6 +884,13 @@
     data[dayKey] = e;
     save(data);
     var after = dayPoints(dayKey);
+    if (dayKey === todayKey) {
+      var dk = domainOfKey(key);
+      // Keep multi-toggle cards open while you work them; let single cards recede
+      // the moment they're completed.
+      if (dk === "health" || dk === "self") expandedCards[dk] = true;
+      else if (domDone(data[dayKey], dk)) delete expandedCards[dk];
+    }
     renderAll();
     pushDay(dayKey); // sync this day if signed in
     if (dayKey === todayKey && after > before) celebratePoint();
@@ -882,6 +922,7 @@
   function selectDay(key) {
     if (key > todayKey) key = todayKey; // clamp: no future days
     selectedKey = key;
+    expandedCards = {}; // fresh collapse state per day
     viewMonday = mondayOf(parseKey(key)); // grid follows the selected day's week
     renderAll();
   }
