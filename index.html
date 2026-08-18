@@ -795,6 +795,19 @@
       });
       var cbtn = card.querySelector("[data-collapse]");
       if (cbtn) cbtn.addEventListener("click", function (ev) { ev.stopPropagation(); delete expandedCards[dom.key]; renderCards(); });
+      // Tapping the header of an expanded, completed card recedes it back to a
+      // slim row (same as the ▴ button) — only where collapse actually applies.
+      if (done && selectedKey === todayKey) {
+        var head = card.querySelector(".card-head");
+        if (head) {
+          head.style.cursor = "pointer";
+          head.addEventListener("click", function (ev) {
+            if (ev.target.closest("[data-collapse]")) return; // ▴ handles itself
+            delete expandedCards[dom.key];
+            renderCards();
+          });
+        }
+      }
       cardsEl.appendChild(card);
     });
   }
