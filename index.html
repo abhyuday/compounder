@@ -1025,8 +1025,7 @@
                    '</div>';
           }).join("") +
         '</div>' +
-        recall +
-        '<div class="scored">' + dom.scored + '</div>' + whyAdd;
+        recall + whyAdd;
       Array.prototype.forEach.call(card.querySelectorAll(".sub"), function (el) {
         el.addEventListener("click", function (ev) {
           if (ev.target.closest(".notewrap")) return; // taps in the note area don't toggle
