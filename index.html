@@ -541,16 +541,26 @@
   .toolgroup { margin-bottom: 18px; }
   .toolgroup.open { margin-bottom: 0; }
   .toolgroup-bar {
-    width: 100%; display: flex; align-items: center; gap: 10px;
+    width: 100%; display: flex; align-items: flex-start; gap: 10px;
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
     box-shadow: var(--shadow); color: var(--text); font: inherit; text-align: left;
     padding: 13px 16px; cursor: pointer;
   }
   .toolgroup-bar:hover { border-color: #33404f; }
-  .tg-icon { font-size: 15px; flex: 0 0 auto; }
+  .tg-icon { font-size: 15px; flex: 0 0 auto; line-height: 1.5; }
+  .tg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .tg-top { display: flex; align-items: baseline; gap: 10px; }
   .tg-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
   .tg-sum { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .toolgroup-bar .chev { color: var(--faint); font-size: 11px; margin-left: 10px; transition: transform .2s ease; flex: 0 0 auto; }
+  /* Current schedule block + what to do now — shown on the tile only when collapsed */
+  .tg-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px; font-size: 12px; line-height: 1.35; }
+  .tg-now:empty { display: none; }
+  .toolgroup.open .tg-now { display: none; }
+  .tg-now-time { color: var(--accent); font-weight: 700; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+  .tg-now-label { color: var(--text); font-weight: 600; }
+  .tg-todo { color: var(--muted); width: 100%; }
+  .tg-todo.focus { color: var(--accent); font-weight: 600; }
+  .toolgroup-bar .chev { color: var(--faint); font-size: 11px; margin-left: 10px; transition: transform .2s ease; flex: 0 0 auto; line-height: 1.7; }
   .toolgroup.open .toolgroup-bar { margin-bottom: 16px; }
   .toolgroup.open .toolgroup-bar .chev { transform: rotate(180deg); }
   .toolgroup-body { display: none; }
@@ -580,8 +590,10 @@
   <section class="toolgroup" id="toolgroup">
     <button class="toolgroup-bar" id="toolgroupBar" aria-expanded="false">
       <span class="tg-icon">🗂️</span>
-      <span class="tg-title">Overview</span>
-      <span class="tg-sum" id="toolgroupSum"></span>
+      <div class="tg-main">
+        <div class="tg-top"><span class="tg-title">Overview</span><span class="tg-sum" id="toolgroupSum"></span></div>
+        <div class="tg-now" id="toolgroupNow"></div>
+      </div>
       <span class="chev">▾</span>
     </button>
     <div class="toolgroup-body">
@@ -1259,6 +1271,28 @@
     renderToolgroup();
   });
   renderToolgroup();
+
+  // The current time block + what to do now, shown on the collapsed Overview tile.
+  // Reads the schedule data but is rendered independently of the Schedule component.
+  function renderOverviewNow() {
+    var host = document.getElementById("toolgroupNow");
+    if (!host) return;
+    if (!schedule || !schedule.length) { host.innerHTML = ""; return; }
+    var idx = currentBlockIndex();
+    var cur = schedule[idx];
+    if (!cur) { host.innerHTML = ""; return; }
+    var next = schedule[(idx + 1) % schedule.length];
+    var range = cur.start ? (fmt12(cur.start) + (next ? " – " + fmt12(next.start) : "")) : "";
+    var todo = "";
+    if (cur.dom && !domDone(dayEntry(todayKey), cur.dom)) {
+      todo = '<span class="tg-todo focus">→ ' + escapeHtml(domName(cur.dom)) + " — not logged yet</span>";
+    } else if (cur.note) {
+      todo = '<span class="tg-todo">' + escapeHtml(cur.note) + "</span>";
+    }
+    host.innerHTML =
+      '<span class="tg-now-time">Now' + (range ? " · " + escapeHtml(range) : "") + "</span>" +
+      '<span class="tg-now-label">' + escapeHtml(cur.label) + "</span>" + todo;
+  }
 
   // ---- render: week grid (navigable) ----
   function renderGrid() {
@@ -2048,6 +2082,7 @@
     if (!rewardsEditing) renderRewards();
     if (!goalInputFocused()) renderGoals();
     if (!reviewInputFocused()) renderHistory();
+    renderOverviewNow();
   }
 
   // Schedule interactions (delegated on the stable container).
@@ -2065,7 +2100,7 @@
   function loadDefaultSched() { return DEFAULT_SCHED.map(function (b) { return { start: b.start, label: b.label, note: b.note, dom: b.dom }; }); }
 
   // Keep the "Now" block current through the day.
-  setInterval(function () { if (!schedEditing) renderSchedule(); }, 60000);
+  setInterval(function () { if (!schedEditing) renderSchedule(); renderOverviewNow(); }, 60000);
 
   // Day switcher controls.
   document.getElementById("dayPrev").addEventListener("click", function () {
