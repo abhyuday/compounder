@@ -1659,16 +1659,17 @@
     }
     return { done: g.done ? 1 : 0, total: 1 };
   }
-  // Locate a node by id, returning it with its containing array, index, and top-level ancestor.
+  // Locate a node by id, returning it with its containing array, index, top-level
+  // ancestor, and immediate parent id (null when the node is top-level).
   function findGoal(id) {
     var res = null;
-    (function walk(arr, top) {
+    (function walk(arr, top, parentId) {
       for (var i = 0; i < arr.length && !res; i++) {
         var n = arr[i], t = top || n;
-        if (n.id === id) { res = { node: n, parent: arr, index: i, top: t }; return; }
-        if (n.kids && n.kids.length) walk(n.kids, t);
+        if (n.id === id) { res = { node: n, parent: arr, index: i, top: t, parentId: parentId }; return; }
+        if (n.kids && n.kids.length) walk(n.kids, t, n.id);
       }
-    })(goals, null);
+    })(goals, null, null);
     return res;
   }
   function goalInputFocused() { return !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-ginput]")); }
@@ -1697,6 +1698,17 @@
     goalEditing = null;
     saveGoals();
     renderGoals();
+  }
+  // Enter while editing: commit this goal, then open a fresh sibling to keep typing.
+  // An empty title just commits (removing the blank) and ends the chain.
+  function goalCommitAndAddSibling(id, val) {
+    var f = findGoal(id);
+    if (!f || !(val || "").trim()) { goalCommitTitle(id, val); return; }
+    f.node.title = val.trim();
+    var parentId = f.parentId; // null → new top-level sibling
+    goalEditing = null;
+    saveGoals();
+    goalAdd(parentId); // creates the sibling and focuses it
   }
   function goalCheck(id) {
     var f = findGoal(id); if (!f) return;
@@ -1779,10 +1791,14 @@
       var gin = host.querySelector('[data-ginput]');
       if (gin) {
         gin.addEventListener("keydown", function (ev) {
-          if (ev.key === "Enter") { ev.preventDefault(); goalCommitTitle(gin.getAttribute("data-ginput"), gin.value); }
+          if (ev.key === "Enter") { ev.preventDefault(); goalCommitAndAddSibling(gin.getAttribute("data-ginput"), gin.value); }
           else if (ev.key === "Escape") { goalCommitTitle(gin.getAttribute("data-ginput"), gin.value); }
         });
-        gin.addEventListener("blur", function () { goalCommitTitle(gin.getAttribute("data-ginput"), gin.value); });
+        gin.addEventListener("blur", function () {
+          var id = gin.getAttribute("data-ginput");
+          if (goalEditing !== id) return; // a newer editor took over (Enter added a sibling) — don't clobber it
+          goalCommitTitle(id, gin.value);
+        });
         gin.focus(); gin.setSelectionRange(gin.value.length, gin.value.length);
       }
     }
