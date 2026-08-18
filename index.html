@@ -595,7 +595,10 @@
       { key: "heat",   name: "Eat",   hint: "Protein first. Nothing you'd hide." },
       { key: "hsleep", name: "Sleep", hint: "Screens down, lights-out by your target." }
     ] },
-    { key: "family", name: "Family", word: "Presence", move: "One undistracted block with one specific person. Phone in another room — not face-down. Presence they can feel.", scored: "Present / absent" },
+    { key: "family", name: "Family", scored: "Both — Presence + Conflict", subs: [
+      { key: "fpres", name: "Presence", hint: "One undistracted block with one specific person. Phone in another room — presence they can feel." },
+      { key: "fconf", name: "Conflict", hint: "Faced the friction instead of dodging it — a hard talk, a repair, an honest apology. No stonewalling." }
+    ] },
     { key: "self",   name: "Self",   scored: "2 of 4 — hold the line", subs: [
       { key: "vind",  name: "Resolve",     hint: "Did what you resolved. No hours bled to nothing." },
       { key: "vsin",  name: "Sincerity",   hint: "Honest and clean-tongued. No deceit, no idle harm." },
@@ -611,6 +614,15 @@
   var SELF_SUBS = ["vind", "vsin", "vtrq", "vrest"];
   function selfCount(e) { return SELF_SUBS.reduce(function (n, k) { return n + (e && e[k] ? 1 : 0); }, 0); }
   function selfDone(e) { return selfCount(e) >= 2; }
+  // Family now needs BOTH Presence and Conflict. Legacy days (logged before the
+  // Conflict checkbox existed) have no fconf recorded — they keep their point on
+  // Presence alone, so history and streaks aren't retroactively rewritten.
+  var FAMILY_SUBS = ["fpres", "fconf"];
+  function familyDone(e) {
+    if (!e) return false;
+    if (typeof e.fconf === "boolean") return !!e.fpres && !!e.fconf; // Conflict tracked → both required
+    return !!e.fpres;                                                // legacy day → Presence alone
+  }
 
   // ---- storage (scoped per account, so different users don't mix) ----
   var ANON_KEY = STORE;                 // board used when signed out
@@ -633,6 +645,11 @@
       if (typeof e.vrest !== "boolean") { e.vrest = !!e.self && !(e.vind || e.vsin || e.vtrq); }
       if (typeof e.vind !== "boolean") { e.vind = false; e.vsin = false; e.vtrq = false; }
       e.self = selfDone(e); // keep the derived point in sync
+      // Family gains a Conflict checkbox. Migrate the legacy single Family point
+      // (which was Presence) into fpres; leave fconf unset so legacy days stay
+      // Presence-only via familyDone(). New days default fconf=false → need both.
+      if (typeof e.fpres !== "boolean") e.fpres = !!e.family;
+      e.family = familyDone(e); // keep the derived point in sync
       if (typeof e.updated_at !== "number") e.updated_at = hasData(e) ? Date.now() : 0;
     });
     return d;
@@ -670,12 +687,12 @@
 
   function dayEntry(key) {
     return data[key] || { money: false, hmove: false, heat: false, hsleep: false, health: false,
-      family: false, vind: false, vsin: false, vtrq: false, vrest: false, self: false,
+      fpres: false, fconf: false, family: false, vind: false, vsin: false, vtrq: false, vrest: false, self: false,
       am_intent: "", pm_review: "", hard: false, notes: {}, rewards: [] };
   }
   function dayPoints(key) {
     var e = data[key]; if (!e) return 0;
-    return (e.money?1:0) + (healthDone(e)?1:0) + (e.family?1:0) + (selfDone(e)?1:0) + (e.hard?1:0);
+    return (e.money?1:0) + (healthDone(e)?1:0) + (familyDone(e)?1:0) + (selfDone(e)?1:0) + (e.hard?1:0);
   }
   function weekPoints(monday) {
     var t = 0;
@@ -770,6 +787,7 @@
   function domDone(e, domKey) {
     if (domKey === "health") return healthDone(e);
     if (domKey === "self") return selfDone(e);
+    if (domKey === "family") return familyDone(e);
     return !!e[domKey];
   }
   function domName(key) {
@@ -844,6 +862,7 @@
   function domainOfKey(key) {
     if (HEALTH_SUBS.indexOf(key) !== -1) return "health";
     if (SELF_SUBS.indexOf(key) !== -1) return "self";
+    if (FAMILY_SUBS.indexOf(key) !== -1) return "family";
     return key;
   }
   function renderCards() {
@@ -856,7 +875,7 @@
       var multi = !!dom.subs;
       var rows = multi ? dom.subs : [{ key: dom.key, move: dom.move }];
       var cnt = rows.reduce(function (n, r) { return n + (e[r.key] ? 1 : 0); }, 0);
-      var done = multi ? (cnt >= 2) : !!e[dom.key];
+      var done = domDone(e, dom.key); // derived (Health/Self 2-of-N, Family both, single = the box)
       var perfect = multi && cnt === rows.length;
       var status = multi ? (perfect ? "Perfect" : (done ? "Done" : (cnt + " / " + rows.length)))
                          : (done ? "Done" : "Not yet");
@@ -1047,6 +1066,7 @@
     e[key] = !e[key];
     if (HEALTH_SUBS.indexOf(key) !== -1) e.health = healthDone(e); // keep derived point in sync
     if (SELF_SUBS.indexOf(key) !== -1) e.self = selfDone(e); // keep derived point in sync
+    if (FAMILY_SUBS.indexOf(key) !== -1) e.family = familyDone(e); // keep derived point in sync
     e.updated_at = Date.now();
     data[dayKey] = e;
     save(data);
@@ -1055,7 +1075,7 @@
       var dk = domainOfKey(key);
       // Keep multi-toggle cards open while you work them; let single cards recede
       // the moment they're completed.
-      if (dk === "health" || dk === "self") expandedCards[dk] = true;
+      if (dk === "health" || dk === "self" || dk === "family") expandedCards[dk] = true;
       else if (domDone(data[dayKey], dk)) delete expandedCards[dk];
     }
     renderAll();
@@ -2019,32 +2039,53 @@
   }
 
   // ---- sync engine (last-write-wins per day) ----
+  // Whether the days table has the fpres/fconf columns yet. Flipped off (until the
+  // page reloads) the first time a query proves them missing, so the app keeps
+  // syncing everything else before the Conflict migration is run.
+  var daysHaveConflict = true;
+  var DAY_COLS_BASE = "day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,vrest,am_intent,pm_review,hard,notes,rewards,updated_at";
+  function daySelectCols() { return DAY_COLS_BASE + (daysHaveConflict ? ",fpres,fconf" : ""); }
+  function isMissingConflictCol(err) {
+    if (!err) return false;
+    var s = ((err.message || "") + " " + (err.code || "") + " " + (err.details || "") + " " + (err.hint || "")).toLowerCase();
+    return err.code === "42703" || err.code === "pgrst204" || err.code === "pgrst100" ||
+      s.indexOf("fpres") !== -1 || s.indexOf("fconf") !== -1 ||
+      (s.indexOf("column") !== -1 && s.indexOf("exist") !== -1);
+  }
   function entryFromRow(r) {
     var e = {
-      money: !!r.money, family: !!r.family,
+      money: !!r.money,
       hmove: !!r.hmove, heat: !!r.heat, hsleep: !!r.hsleep,
+      fpres: (typeof r.fpres === "boolean") ? r.fpres : !!r.family, // legacy: Presence from the old point
       vind: !!r.vind, vsin: !!r.vsin, vtrq: !!r.vtrq, vrest: !!r.vrest,
       am_intent: r.am_intent || "", pm_review: r.pm_review || "", hard: !!r.hard,
       notes: r.notes || {}, rewards: Array.isArray(r.rewards) ? r.rewards : [],
       updated_at: r.updated_at ? Date.parse(r.updated_at) : 0
     };
+    if (typeof r.fconf === "boolean") e.fconf = r.fconf; // absent → legacy day, Presence-only via familyDone
     e.health = healthDone(e);
     // Fallback if the vrest backfill hasn't run: an old restoration point (self=true)
     // with no virtues becomes the Restoration toggle.
     if (!e.vrest && !!r.self && !e.vind && !e.vsin && !e.vtrq) e.vrest = true;
     e.self = selfDone(e);
+    e.family = familyDone(e); // derived point (kept in the family column for external readers)
     return e;
   }
   function rowFromEntry(day, e) {
-    return {
+    var row = {
       user_id: session.user.id, day: day,
-      money: !!e.money, family: !!e.family,
+      money: !!e.money, family: familyDone(e), // family column stays = the earned point
       hmove: !!e.hmove, heat: !!e.heat, hsleep: !!e.hsleep, health: healthDone(e),
       vind: !!e.vind, vsin: !!e.vsin, vtrq: !!e.vtrq, vrest: !!e.vrest, self: selfDone(e),
       am_intent: e.am_intent || "", pm_review: e.pm_review || "", hard: !!e.hard,
       notes: e.notes || {}, rewards: e.rewards || [],
       updated_at: new Date(e.updated_at || Date.now()).toISOString()
     };
+    if (daysHaveConflict) {
+      row.fpres = !!e.fpres;
+      row.fconf = (typeof e.fconf === "boolean") ? e.fconf : null; // legacy day → null preserves Presence-only
+    }
+    return row;
   }
   function hasNotes(e) {
     if (!e || !e.notes) return false;
@@ -2057,7 +2098,7 @@
     });
   }
   function hasData(e) {
-    return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.family || e.vind || e.vsin || e.vtrq || e.vrest ||
+    return !!(e && (e.money || e.hmove || e.heat || e.hsleep || e.fpres || e.fconf || e.vind || e.vsin || e.vtrq || e.vrest ||
       (e.am_intent && e.am_intent.trim()) || (e.pm_review && e.pm_review.trim()) || e.hard || hasNotes(e) ||
       (e.rewards && e.rewards.length)));
   }
@@ -2073,8 +2114,10 @@
     var e = data[day]; if (!e) return;
     sb.from("days").upsert(rowFromEntry(day, e), { onConflict: "user_id,day" })
       .then(function (res) {
-        if (res.error) setPill("err", "Sync error");
-        else if (!syncing) setPill("synced", "Synced");
+        if (res.error) {
+          if (daysHaveConflict && isMissingConflictCol(res.error)) { daysHaveConflict = false; pushDay(day); return; }
+          setPill("err", "Sync error");
+        } else if (!syncing) setPill("synced", "Synced");
       })
       .catch(function () { setPill("err", "Offline"); });
   }
@@ -2083,9 +2126,12 @@
     if (!sb || !session || syncing) return;
     syncing = true;
     setPill("busy", "Syncing…");
-    sb.from("days").select("day,money,health,family,self,hmove,heat,hsleep,vind,vsin,vtrq,vrest,am_intent,pm_review,hard,notes,rewards,updated_at")
+    sb.from("days").select(daySelectCols())
       .then(function (res) {
-        if (res.error) { setPill("err", "Sync error"); syncing = false; return; }
+        if (res.error) {
+          if (daysHaveConflict && isMissingConflictCol(res.error)) { daysHaveConflict = false; syncing = false; sync(); return; }
+          setPill("err", "Sync error"); syncing = false; return;
+        }
         var remote = {};
         (res.data || []).forEach(function (r) { remote[r.day] = entryFromRow(r); });
 
