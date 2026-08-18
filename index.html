@@ -454,6 +454,53 @@
     .note-bullet { font-size: 16px; padding: 4px 0; width: 20px; }
   }
 
+  /* Identity line (opt-in "why") + last-note recall on cards */
+  .card-why { font-size: 12.5px; color: var(--muted); font-style: italic; margin-top: 4px; cursor: text; line-height: 1.35; }
+  .card-why:hover { color: var(--text); }
+  .why-in { width: 100%; margin-top: 4px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 9px; font-size: 13px; font-family: inherit; font-style: italic; outline: none; }
+  .why-in:focus { border-color: var(--dc, var(--accent)); }
+  .why-add { display: inline-block; background: none; border: none; color: var(--faint); font-size: 12px; cursor: pointer; padding: 6px 0 0; }
+  .why-add:hover { color: var(--muted); }
+  .card-recall { font-size: 12px; color: var(--faint); margin-top: 8px; padding-left: 2px; border-left: 2px solid var(--border); padding-left: 9px; line-height: 1.4; }
+  .card-recall b { color: var(--muted); font-weight: 600; font-style: normal; }
+  .card-recall .ago { color: var(--faint); }
+
+  /* Move-streak chip on the today line */
+  .streak-chip { color: var(--done); font-weight: 600; font-size: 12.5px; margin-left: 8px; white-space: nowrap; }
+
+  /* Weakest-link strip (inside History) */
+  .wl { padding: 4px 14px 8px; }
+  .wl-hd { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 6px 0 10px; }
+  .wl-row { display: grid; grid-template-columns: 62px 1fr 40px; gap: 10px; align-items: center; margin-bottom: 7px; }
+  .wl-name { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wl-track { height: 8px; border-radius: 5px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; }
+  .wl-fill { height: 100%; border-radius: 5px; background: var(--dc, var(--faint)); opacity: .9; }
+  .wl-pct { font-size: 11.5px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .wl-row.worst .wl-name { color: var(--accent); font-weight: 600; }
+  .wl-row.worst .wl-pct { color: var(--accent); }
+  .wl-note { font-size: 11.5px; color: var(--faint); margin-top: 4px; }
+  .wl-note b { color: var(--accent); }
+
+  /* Compounding curve */
+  .compound { padding: 6px 14px 4px; }
+  .compound-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 8px 0 6px; }
+  .compound-hd .t { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .compound-hd .mo { font-size: 12px; font-weight: 600; }
+  .mo.up { color: var(--done); } .mo.flat { color: var(--muted); } .mo.down { color: var(--comfort); }
+  .compound svg { display: block; width: 100%; height: 66px; overflow: visible; }
+  .compound-cap { font-size: 11px; color: var(--faint); text-align: center; padding: 4px 0 2px; }
+
+  /* Weekly review */
+  .review { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .review-hd { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
+  .review-weak { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+  .review-weak b { color: var(--accent); }
+  .review-in { width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 8px 10px; font-size: 13.5px; font-family: inherit; line-height: 1.4; resize: none; overflow: hidden; outline: none; }
+  .review-in:focus { border-color: var(--accent); }
+  .review-saved { font-size: 12px; color: var(--faint); margin-top: 5px; }
+  .review-saved b { color: var(--muted); }
+  .hist-due { color: var(--accent); }
+
   @media (display-mode: standalone) {
     /* A touch more breathing room when launched as an installed app */
     body { padding-top: calc(14px + env(safe-area-inset-top)); }
@@ -503,7 +550,7 @@
   <section class="cards" id="cards"></section>
 
   <div class="today">
-    <span><span id="scoreLabel">Today</span> — <b id="todayScore">0</b> of <b id="todayMax">5</b></span>
+    <span><span id="scoreLabel">Today</span> — <b id="todayScore">0</b> of <b id="todayMax">5</b><span class="streak-chip" id="streakChip"></span></span>
     <span class="pips" id="pips"></span>
   </div>
 
@@ -659,6 +706,66 @@
     }
     return { total: total, active: active, weeksTarget: weeksTarget };
   }
+  // Earliest day with any logged data (for windowed stats).
+  function earliestDayKey() {
+    var keys = Object.keys(data), e = null;
+    keys.forEach(function (k) { if (hasData(data[k]) && (!e || k < e)) e = k; });
+    return e;
+  }
+  // Gentle "needle-moved" streak: consecutive days scoring ≥1 point, ending today
+  // (today counts once it has a point; an empty today doesn't break it). One missed
+  // day is forgiven — a built-in freeze; a second miss ends the run. Never a 5/5 streak.
+  function moveStreak() {
+    var count = 0, grace = 1, guard = 0, i = 0;
+    while (guard++ < 800) {
+      var key = ymd(addDays(today, -i));
+      if (dayPoints(key) >= 1) count++;
+      else if (i === 0) { /* today still open — no penalty, don't count */ }
+      else if (grace > 0) grace--;     // forgive a single miss
+      else break;
+      i++;
+    }
+    return count;
+  }
+  // Per-dimension hit-rate over a trailing window (default 8 weeks), clamped to the
+  // days actually tracked. Used by the weakest-link strip.
+  function dimStats(weeks) {
+    var span = (weeks || 8) * 7;
+    var earliest = earliestDayKey();
+    if (!earliest) return null;
+    var startKey = ymd(addDays(today, -(span - 1)));
+    if (startKey < earliest) startKey = earliest;
+    var den = 0, cur = parseKey(startKey);
+    while (ymd(cur) <= todayKey) { den++; cur = addDays(cur, 1); }
+    if (den < 1) return null;
+    return DOMAINS.map(function (dom) {
+      var hit = 0, d = parseKey(startKey);
+      while (ymd(d) <= todayKey) { if (domDone(dayEntry(ymd(d)), dom.key)) hit++; d = addDays(d, 1); }
+      return { key: dom.key, name: dom.name, hit: hit, den: den, rate: hit / den };
+    });
+  }
+  // The most recent note on a domain's own checkpoints, strictly before a given day.
+  function lastNoteFor(domKey, beforeKey) {
+    var subKeys = domKey === "health" ? HEALTH_SUBS : domKey === "self" ? SELF_SUBS : [domKey];
+    var days = Object.keys(data).filter(function (k) { return k < beforeKey; }).sort().reverse();
+    for (var i = 0; i < days.length; i++) {
+      var e = data[days[i]];
+      if (!e || !e.notes) continue;
+      for (var j = 0; j < subKeys.length; j++) {
+        var arr = notesArr(e, subKeys[j]);
+        for (var n = arr.length - 1; n >= 0; n--) {
+          if (arr[n].text && arr[n].text.trim()) return { text: arr[n].text.trim(), day: days[i] };
+        }
+      }
+    }
+    return null;
+  }
+  function daysAgoLabel(key) {
+    var diff = Math.round((parseKey(todayKey) - parseKey(key)) / 86400000);
+    if (diff <= 0) return "today";
+    if (diff === 1) return "yesterday";
+    return diff + "d ago";
+  }
   // Is a given domain's point earned for a day-entry?
   function domDone(e, domKey) {
     if (domKey === "health") return healthDone(e);
@@ -727,9 +834,13 @@
   function noteInputFocused() {
     return !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-noteinput]"));
   }
+  function whyInputFocused() { return !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-whyinput]")); }
+  function reviewInputFocused() { return !!(document.activeElement && document.activeElement.closest && document.activeElement.closest("[data-reviewinput]")); }
+  function anyEditorFocused() { return noteInputFocused() || whyInputFocused() || reviewInputFocused(); }
   // Completed cards "recede" — collapse to a slim dimmed row so undone ones stand
   // out. Tap a collapsed card to reopen it; the ▴ collapses it again.
   var expandedCards = {};
+  var whyEditing = null; // domain key whose identity ("why") line is being edited
   function domainOfKey(key) {
     if (HEALTH_SUBS.indexOf(key) !== -1) return "health";
     if (SELF_SUBS.indexOf(key) !== -1) return "self";
@@ -767,11 +878,25 @@
         return;
       }
 
+      // Identity ("why") line — opt-in, shown under the domain label; and a quiet
+      // recall of the last note logged on this domain, on today's card only.
+      var idTxt = identity[dom.key];
+      var whyHtml = (whyEditing === dom.key)
+        ? '<div class="card-why editing"><input class="why-in" data-whyinput="' + dom.key + '" value="' + escapeHtml(idTxt || "") + '" placeholder="I’m someone who…" maxlength="90"></div>'
+        : (idTxt && idTxt.trim() ? '<div class="card-why" data-whyedit="' + dom.key + '">“' + escapeHtml(idTxt.trim()) + '”</div>' : "");
+      var recall = "";
+      if (selectedKey === todayKey) {
+        var ln = lastNoteFor(dom.key, todayKey);
+        if (ln) recall = '<div class="card-recall">last: <b>' + escapeHtml(ln.text) + '</b> <span class="ago">· ' + daysAgoLabel(ln.day) + '</span></div>';
+      }
+      var whyAdd = (!(idTxt && idTxt.trim()) && whyEditing !== dom.key)
+        ? '<button class="why-add" data-whyaddbtn="' + dom.key + '">+ why</button>' : "";
+
       card.className = "card subs-card " + dom.key + (done ? " done" : "") + (startHere ? " start" : "");
       card.innerHTML =
         '<div class="card-head">' +
           '<div class="flex-title"><div class="domain">' + dom.name +
-            (startHere ? ' <span class="start-here">start here</span>' : "") + '</div></div>' +
+            (startHere ? ' <span class="start-here">start here</span>' : "") + '</div>' + whyHtml + '</div>' +
           '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
           (done ? '<button class="card-collapse" data-collapse="' + dom.key + '" title="Collapse">▴</button>' : "") +
         '</div>' +
@@ -786,13 +911,29 @@
                    '</div>';
           }).join("") +
         '</div>' +
-        '<div class="scored">' + dom.scored + '</div>';
+        recall +
+        '<div class="scored">' + dom.scored + '</div>' + whyAdd;
       Array.prototype.forEach.call(card.querySelectorAll(".sub"), function (el) {
         el.addEventListener("click", function (ev) {
           if (ev.target.closest(".notewrap")) return; // taps in the note area don't toggle
           setDomain(selectedKey, el.getAttribute("data-sub"));
         });
       });
+      // Identity-line editing (stopPropagation so it never triggers the header recede).
+      Array.prototype.forEach.call(card.querySelectorAll("[data-whyedit]"), function (el) {
+        el.addEventListener("click", function (ev) { ev.stopPropagation(); openWhy(el.getAttribute("data-whyedit")); });
+      });
+      var wadd = card.querySelector("[data-whyaddbtn]");
+      if (wadd) wadd.addEventListener("click", function (ev) { ev.stopPropagation(); openWhy(wadd.getAttribute("data-whyaddbtn")); });
+      var win = card.querySelector("[data-whyinput]");
+      if (win) {
+        win.addEventListener("click", function (ev) { ev.stopPropagation(); });
+        win.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter") { ev.preventDefault(); win.blur(); }
+          else if (ev.key === "Escape") { whyEditing = null; renderCards(); }
+        });
+        win.addEventListener("blur", function () { commitWhy(dom.key, win.value); });
+      }
       var cbtn = card.querySelector("[data-collapse]");
       if (cbtn) cbtn.addEventListener("click", function (ev) { ev.stopPropagation(); delete expandedCards[dom.key]; renderCards(); });
       // Tapping the header of an expanded, completed card recedes it back to a
@@ -810,6 +951,19 @@
       }
       cardsEl.appendChild(card);
     });
+  }
+  function openWhy(key) {
+    whyEditing = key;
+    renderCards();
+    var inp = document.querySelector('[data-whyinput="' + key + '"]');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+  function commitWhy(key, val) {
+    val = (val || "").trim();
+    if (val) identity[key] = val; else delete identity[key];
+    whyEditing = null;
+    saveIdentity();
+    renderCards();
   }
 
   // Note editing state + interactions. id = "key:index". Handlers are shared by
@@ -955,6 +1109,13 @@
     document.getElementById("todayScore").textContent = pts;
     document.getElementById("scoreLabel").textContent = dayLabel(selectedKey);
     document.getElementById("todayMax").textContent = DAILY_MAX;
+    // Gentle "needle-moved" chain — only meaningful on today, only once it's ≥2.
+    var chip = document.getElementById("streakChip");
+    if (chip) {
+      var ms = (selectedKey === todayKey) ? moveStreak() : 0;
+      chip.textContent = ms >= 2 ? ("🔗 " + ms + "-day streak") : "";
+      chip.title = "Days in a row you moved the needle (≥1 point). One miss is forgiven.";
+    }
     var pips = document.getElementById("pips");
     pips.innerHTML = "";
     for (var i = 0; i < DAILY_MAX; i++) {
@@ -1195,6 +1356,88 @@
   }
   loadRewards();
 
+  // ======================= Identity lines ("why", per dimension — opt-in, synced) =======================
+  var IDENTITY_KEY = "compounder.identity";
+  var identity = {};        // { hard:"…", money:"…", … } — one statement per domain
+  var identityTs = 0;
+  function identityKey() { return session ? (IDENTITY_KEY + "." + session.user.id) : IDENTITY_KEY; }
+  function loadIdentity() {
+    var k = identityKey();
+    try { var o = JSON.parse(localStorage.getItem(k)); if (o && typeof o === "object") { identity = o; identityTs = (+localStorage.getItem(k + ".ts")) || 0; return; } } catch (e) {}
+    identity = {}; identityTs = 0;
+  }
+  function persistIdentity() {
+    var k = identityKey();
+    localStorage.setItem(k, JSON.stringify(identity));
+    localStorage.setItem(k + ".ts", String(identityTs));
+  }
+  function saveIdentity() { identityTs = Date.now(); persistIdentity(); pushIdentity(); }
+  function pushIdentity() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert(
+      { user_id: session.user.id, identity: identity, identity_updated_at: new Date(identityTs || Date.now()).toISOString() },
+      { onConflict: "user_id" }
+    ).then(function () {}, function () {});
+  }
+  function syncIdentity() {
+    if (!sb || !session) return;
+    sb.from("user_settings").select("identity,identity_updated_at").eq("user_id", session.user.id).maybeSingle()
+      .then(function (res) {
+        if (res.error) return; // column may not exist yet — silently skip
+        var r = res.data;
+        var rts = (r && r.identity_updated_at) ? Date.parse(r.identity_updated_at) : 0;
+        if (r && r.identity && rts > identityTs) {
+          identity = r.identity; identityTs = rts; persistIdentity();
+          if (whyEditing == null) renderCards();
+        } else if (identityTs > rts && Object.keys(identity).length) {
+          pushIdentity();
+        }
+      }, function () {});
+  }
+  function onAuthIdentity() { loadIdentity(); if (session) syncIdentity(); }
+  loadIdentity();
+
+  // ======================= Weekly reviews (one line per week, synced) =======================
+  var REVIEWS_KEY = "compounder.reviews";
+  var reviews = {};         // { "YYYY-MM-DD"(that week's Monday): "text" }
+  var reviewsTs = 0;
+  function reviewsStoreKey() { return session ? (REVIEWS_KEY + "." + session.user.id) : REVIEWS_KEY; }
+  function loadReviews() {
+    var k = reviewsStoreKey();
+    try { var o = JSON.parse(localStorage.getItem(k)); if (o && typeof o === "object") { reviews = o; reviewsTs = (+localStorage.getItem(k + ".ts")) || 0; return; } } catch (e) {}
+    reviews = {}; reviewsTs = 0;
+  }
+  function persistReviews() {
+    var k = reviewsStoreKey();
+    localStorage.setItem(k, JSON.stringify(reviews));
+    localStorage.setItem(k + ".ts", String(reviewsTs));
+  }
+  function saveReviews() { reviewsTs = Date.now(); persistReviews(); pushReviews(); }
+  function pushReviews() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert(
+      { user_id: session.user.id, reviews: reviews, reviews_updated_at: new Date(reviewsTs || Date.now()).toISOString() },
+      { onConflict: "user_id" }
+    ).then(function () {}, function () {});
+  }
+  function syncReviews() {
+    if (!sb || !session) return;
+    sb.from("user_settings").select("reviews,reviews_updated_at").eq("user_id", session.user.id).maybeSingle()
+      .then(function (res) {
+        if (res.error) return; // column may not exist yet — silently skip
+        var r = res.data;
+        var rts = (r && r.reviews_updated_at) ? Date.parse(r.reviews_updated_at) : 0;
+        if (r && r.reviews && rts > reviewsTs) {
+          reviews = r.reviews; reviewsTs = rts; persistReviews();
+          if (!reviewInputFocused()) renderHistory();
+        } else if (reviewsTs > rts && Object.keys(reviews).length) {
+          pushReviews();
+        }
+      }, function () {});
+  }
+  function onAuthReviews() { loadReviews(); if (session) syncReviews(); }
+  loadReviews();
+
   // ---- reward economy: spend today's earned points; nothing rolls over ----
   function buyReward(idx) {
     var r = rewardsCat[idx]; if (!r) return;
@@ -1360,10 +1603,12 @@
     var host = document.getElementById("history");
     host.className = "sched" + (historyOpen ? " open" : "");
     var stats = lifetimeStats();
+    var reviewDue = (today.getDay() === 0) && !(reviews[ymd(thisMonday)] && String(reviews[ymd(thisMonday)]).trim());
     var now = '<div class="sched-now" data-hact="toggle">' +
       '<span class="rew-emoji">📈</span>' +
       '<span class="lbl">History</span>' +
-      '<span class="hist-sum">' + stats.weeksTarget + ' wk' + (stats.weeksTarget === 1 ? "" : "s") + ' on target</span>' +
+      '<span class="hist-sum">' + (reviewDue ? '<span class="hist-due">review due</span> · ' : "") +
+        stats.weeksTarget + ' wk' + (stats.weeksTarget === 1 ? "" : "s") + ' on target</span>' +
       '<span class="chev">▾</span></div>';
     var body = "";
     if (historyOpen) {
@@ -1378,31 +1623,121 @@
       }
       var tp = Math.round(TARGET / WEEK_MAX * 100);
       body = '<div class="sched-body">' +
+        weeklyReviewHtml() +
         '<div class="hist-stats">' +
           '<span><b>' + stats.total + '</b>points</span>' +
           '<span><b>' + stats.active + '</b>active days</span>' +
           '<span><b>' + stats.weeksTarget + '</b>weeks on target</span>' +
         '</div>' +
+        compoundCurveHtml(stats.total) +
         '<div class="hist-plot"><div class="hist-goal" style="bottom:' + tp + '%"></div>' + cols + '</div>' +
         '<div class="hist-labels">' + labels + '</div>' +
         '<div class="hist-cap">Last ' + N + ' weeks · dashed line = ' + TARGET + ' target</div>' +
+        weakestLinkHtml() +
       '</div>';
     }
     host.innerHTML = now + body;
+    if (historyOpen) wireReview();
+  }
+  // ---- History sub-parts: weekly review, compounding curve, weakest-link strip ----
+  function weekWeakest() {
+    var best = null;
+    DOMAINS.forEach(function (dom) {
+      var hit = 0;
+      for (var i = 0; i < 7; i++) { if (domDone(dayEntry(ymd(addDays(thisMonday, i))), dom.key)) hit++; }
+      if (best === null || hit < best.hit) best = { key: dom.key, name: dom.name, hit: hit };
+    });
+    return best;
+  }
+  function weeklyReviewHtml() {
+    var mk = ymd(thisMonday);
+    var wp = weekPoints(thisMonday);
+    var weak = weekWeakest();
+    var line = (wp >= TARGET ? 'You hit <b style="color:var(--done)">' + wp + '</b> this week. ' : '<b>' + wp + '</b> points so far. ') +
+      'Weakest link: <b>' + escapeHtml(weak.name) + '</b>.';
+    var saved = reviews[mk] || "";
+    return '<div class="review">' +
+      '<div class="review-hd">This week&#39;s review</div>' +
+      '<div class="review-weak">' + line + '</div>' +
+      '<textarea class="review-in" data-reviewinput="' + mk + '" rows="1" placeholder="One adjustment for next week…">' + escapeHtml(saved) + '</textarea>' +
+    '</div>';
+  }
+  function wireReview() {
+    var ta = document.querySelector('[data-reviewinput]');
+    if (!ta) return;
+    function grow() { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }
+    grow();
+    ta.addEventListener("input", grow);
+    ta.addEventListener("blur", function () {
+      var mk = ta.getAttribute("data-reviewinput"), v = ta.value.trim();
+      if (v) reviews[mk] = v; else delete reviews[mk];
+      saveReviews();
+    });
+  }
+  function momentumLabel(weekly) {
+    if (weekly.length < 4) return { cls: "flat", text: "building" };
+    var avg = function (a) { return a.length ? a.reduce(function (s, x) { return s + x; }, 0) / a.length : 0; };
+    var recent = avg(weekly.slice(-4)), prior = avg(weekly.slice(-8, -4));
+    if (prior === 0) return { cls: "up", text: "↑ building" };
+    var d = recent - prior;
+    if (d > 1.5) return { cls: "up", text: "↑ accelerating" };
+    if (d < -1.5) return { cls: "down", text: "↓ cooling" };
+    return { cls: "flat", text: "→ steady" };
+  }
+  function compoundCurveHtml(total) {
+    var earliest = earliestDayKey();
+    if (!earliest) return "";
+    var startMon = mondayOf(parseKey(earliest));
+    var weekly = [], cumArr = [], cum = 0, m = new Date(startMon), guard = 0;
+    while (ymd(m) <= ymd(thisMonday) && guard++ < 520) {
+      var wp = weekPoints(m); weekly.push(wp); cum += wp; cumArr.push(cum); m = addDays(m, 7);
+    }
+    if (cumArr.length < 2) return ""; // need ≥2 weeks to draw a line
+    var mo = momentumLabel(weekly);
+    var W = 100, H = 40, n = cumArr.length, max = cumArr[n - 1] || 1;
+    var pts = cumArr.map(function (v, idx) {
+      return ((idx / (n - 1)) * W).toFixed(1) + "," + (H - (v / max) * H).toFixed(1);
+    }).join(" ");
+    var lastY = (H - (cumArr[n - 1] / max) * H).toFixed(1);
+    return '<div class="compound">' +
+      '<div class="compound-hd"><span class="t">Compounding</span><span class="mo ' + mo.cls + '">' + mo.text + '</span></div>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+        '<polyline points="' + pts + '" fill="none" stroke="var(--done)" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>' +
+        '<circle cx="100" cy="' + lastY + '" r="2.2" fill="var(--done)" vector-effect="non-scaling-stroke"/>' +
+      '</svg>' +
+      '<div class="compound-cap">' + total + ' points compounded over ' + n + ' week' + (n === 1 ? "" : "s") + '</div>' +
+    '</div>';
+  }
+  function wlColor(k) { return ({ hard: "var(--comfort)", money: "var(--money)", health: "var(--health)", family: "var(--family)", self: "var(--self)" })[k] || "var(--faint)"; }
+  function weakestLinkHtml() {
+    var rows = dimStats(8);
+    if (!rows) return "";
+    var worst = rows.reduce(function (a, b) { return b.rate < a.rate ? b : a; }, rows[0]);
+    var html = '<div class="wl"><div class="wl-hd">Consistency · last 8 weeks</div>';
+    rows.forEach(function (r) {
+      var pct = Math.round(r.rate * 100);
+      html += '<div class="wl-row' + (r.key === worst.key ? " worst" : "") + '" style="--dc:' + wlColor(r.key) + '">' +
+        '<span class="wl-name">' + escapeHtml(r.name) + '</span>' +
+        '<span class="wl-track"><span class="wl-fill" style="width:' + Math.max(3, pct) + '%"></span></span>' +
+        '<span class="wl-pct">' + pct + '%</span></div>';
+    });
+    return html + '<div class="wl-note">Soft spot right now: <b>' + escapeHtml(worst.name) +
+      '</b> — hit ' + Math.round(worst.rate * 100) + '% of days.</div></div>';
   }
   document.getElementById("history").addEventListener("click", function (ev) {
+    if (ev.target.closest && ev.target.closest("[data-reviewinput]")) return; // don't toggle when editing the review
     if (ev.target.closest && ev.target.closest("[data-hact]")) { historyOpen = !historyOpen; renderHistory(); }
   });
 
   function renderAll() {
     renderDaySwitch();
-    if (!noteInputFocused()) renderCards(); // don't steal focus while a note is being typed
+    if (!anyEditorFocused()) renderCards(); // don't steal focus while a note/why is being typed
     renderToday();
     renderWeekBar();
     renderGrid();
     if (!schedEditing) renderSchedule();
     if (!rewardsEditing) renderRewards();
-    renderHistory();
+    if (!reviewInputFocused()) renderHistory();
   }
 
   // Schedule interactions (delegated on the stable container).
@@ -1809,6 +2144,8 @@
     data = load(); // reload the board for the now-current scope (this user, or anon)
     onAuthSchedule(); // reload + reconcile the schedule for this account
     onAuthRewards();  // reload + reconcile the rewards catalog for this account
+    onAuthIdentity(); // reload + reconcile per-dimension identity lines
+    onAuthReviews();  // reload + reconcile weekly reviews
     loadReminderPrefs();
     if (session) {
       claimAnonBoard();
