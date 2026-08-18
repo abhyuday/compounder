@@ -535,6 +535,27 @@
   .goal-row.arch { opacity: .7; }
   .goal-when { font-size: 11px; color: var(--faint); flex: 0 0 auto; }
 
+  /* Overview group — one collapsible wrapper around Schedule, Rewards, Goals, and
+     This Week, so the supporting context folds away from the daily pillars. The
+     inner blocks keep their own look and independent collapsing. */
+  .toolgroup { margin-bottom: 18px; }
+  .toolgroup.open { margin-bottom: 0; }
+  .toolgroup-bar {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); color: var(--text); font: inherit; text-align: left;
+    padding: 13px 16px; cursor: pointer;
+  }
+  .toolgroup-bar:hover { border-color: #33404f; }
+  .tg-icon { font-size: 15px; flex: 0 0 auto; }
+  .tg-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .tg-sum { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .toolgroup-bar .chev { color: var(--faint); font-size: 11px; margin-left: 10px; transition: transform .2s ease; flex: 0 0 auto; }
+  .toolgroup.open .toolgroup-bar { margin-bottom: 16px; }
+  .toolgroup.open .toolgroup-bar .chev { transform: rotate(180deg); }
+  .toolgroup-body { display: none; }
+  .toolgroup.open .toolgroup-body { display: block; }
+
   @media (display-mode: standalone) {
     /* A touch more breathing room when launched as an installed app */
     body { padding-top: calc(14px + env(safe-area-inset-top)); }
@@ -556,22 +577,32 @@
 
   <section class="auth-panel" id="authPanel"></section>
 
-  <section class="sched" id="sched"></section>
+  <section class="toolgroup" id="toolgroup">
+    <button class="toolgroup-bar" id="toolgroupBar" aria-expanded="false">
+      <span class="tg-icon">🗂️</span>
+      <span class="tg-title">Overview</span>
+      <span class="tg-sum" id="toolgroupSum"></span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="toolgroup-body">
+      <section class="sched" id="sched"></section>
 
-  <section class="sched" id="rewards"></section>
+      <section class="sched" id="rewards"></section>
 
-  <section class="sched" id="goals"></section>
+      <section class="sched" id="goals"></section>
 
-  <section class="week">
-    <div class="week-top">
-      <span class="week-label" id="weekLabel">This week <span class="week-streak" id="weekStreak"></span></span>
-      <span class="week-num"><b id="weekPts">0</b><span class="poss"> / <span class="target" id="weekTargetLbl">25 target</span> · <span id="weekPossLbl">35 possible</span></span></span>
+      <section class="week">
+        <div class="week-top">
+          <span class="week-label" id="weekLabel">This week <span class="week-streak" id="weekStreak"></span></span>
+          <span class="week-num"><b id="weekPts">0</b><span class="poss"> / <span class="target" id="weekTargetLbl">25 target</span> · <span id="weekPossLbl">35 possible</span></span></span>
+        </div>
+        <div class="track">
+          <div class="fill" id="weekFill" style="width:0%"></div>
+          <div class="goal" id="weekGoal"></div>
+        </div>
+        <div class="week-foot" id="weekFoot"></div>
+      </section>
     </div>
-    <div class="track">
-      <div class="fill" id="weekFill" style="width:0%"></div>
-      <div class="goal" id="weekGoal"></div>
-    </div>
-    <div class="week-foot" id="weekFoot"></div>
   </section>
 
   <div class="dayswitch">
@@ -1208,7 +1239,26 @@
       var daysLeft = 6 - dayIdx; // days after today in the week
       foot.innerHTML = "<b>" + remaining + "</b> more to hit " + TARGET + " · " + (daysLeft + 1) + " day" + (daysLeft === 0 ? "" : "s") + " left this week.";
     }
+    var tgSum = document.getElementById("toolgroupSum"); // glanceable week progress on the collapsed Overview bar
+    if (tgSum) tgSum.textContent = pts + " / " + TARGET + " this week";
   }
+
+  // ---- Overview group: one collapsible wrapper; remembers its state, collapsed by default ----
+  var toolsOpen = false;
+  try { toolsOpen = localStorage.getItem("compounder.toolsOpen") === "1"; } catch (e) {}
+  function renderToolgroup() {
+    var el = document.getElementById("toolgroup");
+    if (!el) return;
+    el.classList.toggle("open", toolsOpen);
+    var bar = document.getElementById("toolgroupBar");
+    if (bar) bar.setAttribute("aria-expanded", toolsOpen ? "true" : "false");
+  }
+  document.getElementById("toolgroupBar").addEventListener("click", function () {
+    toolsOpen = !toolsOpen;
+    try { localStorage.setItem("compounder.toolsOpen", toolsOpen ? "1" : "0"); } catch (e) {}
+    renderToolgroup();
+  });
+  renderToolgroup();
 
   // ---- render: week grid (navigable) ----
   function renderGrid() {
