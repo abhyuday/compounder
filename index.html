@@ -573,6 +573,42 @@
   .toolgroup-body { display: none; }
   .toolgroup.open .toolgroup-body { display: block; }
 
+  /* Tips icon on each pillar header + the tips modal */
+  .card-tips { flex: 0 0 auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px; margin-left: 6px; opacity: .85; }
+  .card-tips:hover { opacity: 1; }
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 300; display: none;
+    background: rgba(6, 9, 13, 0.66); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    align-items: flex-end; justify-content: center;
+    padding: 0 0 env(safe-area-inset-bottom);
+  }
+  .modal-backdrop.open { display: flex; }
+  @media (min-width: 560px) { .modal-backdrop { align-items: center; padding: 20px; } }
+  .modal {
+    width: 100%; max-width: 480px; max-height: 86vh; overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px 16px 0 0; box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+    padding: 4px 18px calc(18px + env(safe-area-inset-bottom));
+    border-top: 3px solid var(--dc, var(--accent));
+  }
+  @media (min-width: 560px) { .modal { border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.55); } }
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; position: sticky; top: 0; background: var(--panel); padding: 16px 0 12px; z-index: 1; }
+  .modal-title { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--dc, var(--text)); font-weight: 700; }
+  .modal-sub { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  .modal-close { background: none; border: none; color: var(--muted); font-size: 24px; line-height: 1; cursor: pointer; padding: 0 4px; flex: 0 0 auto; }
+  .modal-close:hover { color: var(--text); }
+  .tips-list { display: flex; flex-direction: column; gap: 4px; padding: 2px 0 6px; }
+  .tip-item { display: flex; align-items: flex-start; gap: 9px; padding: 7px 6px; border-radius: 9px; }
+  .tip-item:hover { background: var(--panel-2); }
+  .tip-dot { flex: 0 0 auto; font-size: 16px; line-height: 1.35; }
+  .tip-text { flex: 1; font-size: 14px; color: var(--text); line-height: 1.45; cursor: text; }
+  .tip-del { background: none; border: none; color: var(--faint); font-size: 17px; font-weight: 700; line-height: 1; cursor: pointer; padding: 0 4px; flex: 0 0 auto; opacity: .55; }
+  .tip-item:hover .tip-del { opacity: 1; }
+  .tip-del:hover { color: #e57373; }
+  .tip-in { flex: 1; background: var(--panel-2); border: 1px solid var(--dc, var(--accent)); color: var(--text); border-radius: 9px; padding: 7px 9px; font-size: 14px; font-family: inherit; line-height: 1.45; resize: none; overflow: hidden; outline: none; }
+  .tips-empty { font-size: 13px; color: var(--faint); padding: 10px 6px; }
+  .tips-add { display: block; background: none; border: none; color: var(--dc, var(--accent)); font-size: 13.5px; font-weight: 600; cursor: pointer; padding: 8px 6px 4px; }
+
   @media (display-mode: standalone) {
     /* A touch more breathing room when launched as an installed app */
     body { padding-top: calc(14px + env(safe-area-inset-top)); }
@@ -657,6 +693,8 @@
     <div>Signed in, your board syncs across every device.</div>
   </footer>
 </div>
+
+<div class="modal-backdrop" id="tipsModal"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -1012,6 +1050,7 @@
           '<div class="flex-title"><div class="domain">' + dom.name +
             (startHere ? ' <span class="start-here">start here</span>' : "") + '</div>' + whyHtml + '</div>' +
           '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
+          '<button class="card-tips" data-tips="' + dom.key + '" title="Tips — the ideal to reach for">💡</button>' +
           '<button class="card-collapse" data-collapse="' + dom.key + '" title="Collapse">▴</button>' +
         '</div>' +
         '<div class="subs">' +
@@ -1052,11 +1091,13 @@
       function collapseThisCard() { collapsedCards[dom.key] = true; delete expandedCards[dom.key]; renderCards(); }
       var cbtn = card.querySelector("[data-collapse]");
       if (cbtn) cbtn.addEventListener("click", function (ev) { ev.stopPropagation(); collapseThisCard(); });
+      var tbtn = card.querySelector("[data-tips]");
+      if (tbtn) tbtn.addEventListener("click", function (ev) { ev.stopPropagation(); tipsOpenDom = dom.key; tipEditing = null; renderTips(); });
       var head = card.querySelector(".card-head");
       if (head) {
         head.style.cursor = "pointer";
         head.addEventListener("click", function (ev) {
-          if (ev.target.closest("[data-collapse]") || ev.target.closest("[data-whyedit]") || ev.target.closest("[data-whyinput]")) return;
+          if (ev.target.closest("[data-collapse]") || ev.target.closest("[data-tips]") || ev.target.closest("[data-whyedit]") || ev.target.closest("[data-whyinput]")) return;
           collapseThisCard();
         });
       }
@@ -1815,6 +1856,179 @@
     if (t.closest("[data-gact]")) { goalsOpen = !goalsOpen; renderGoals(); return; }
   });
 
+  // ======================= Tips per dimension (editable, synced) =======================
+  // A modal of "ideal state" bullets for each pillar, seeded from popular sources
+  // and fully editable. The aim: follow these to maximize that area with the least
+  // friction and the most motivation.
+  var DEFAULT_TIPS = {
+    hard: [
+      "Do one thing daily that you'd rather avoid — the workout, the call, the ask. Growth lives just past comfort.",
+      "Treat the urge to avoid as the signal to lean in; the resistance points straight at the growth.",
+      "Shrink the hard thing to a 2-minute start — momentum beats motivation (Atomic Habits).",
+      "Practice voluntary discomfort on purpose: cold, hunger, hard conversations (Stoic training).",
+      "Keep a streak of hard things done — proof to yourself that you're someone who doesn't flinch."
+    ],
+    money: [
+      "Pay yourself first: automate saving and investing before you spend (The Richest Man in Babylon).",
+      "Live below your means — a high savings rate matters more than a high income (The Psychology of Money).",
+      "Invest consistently in low-cost, broad index funds; time in the market beats timing it (Bogleheads).",
+      "Let compounding run: start now, stay invested, and don't interrupt it needlessly.",
+      "Hold a 3–6 month emergency fund before chasing higher returns.",
+      "Widen the gap: grow income, avoid lifestyle creep, keep fixed costs low."
+    ],
+    health: [
+      "Strength train 2–3×/week and get daily Zone 2 cardio — muscle is longevity (Outlive, Attia).",
+      "Protein first: ~1g per lb of target bodyweight; eat mostly whole, minimally-processed food.",
+      "Protect sleep: consistent schedule, dark cool room, no screens before bed, morning sunlight (Huberman).",
+      "Aim for 7–9 hours — sleep is the foundation that makes training and diet actually work.",
+      "Move all day: 8–10k steps beats one workout followed by sitting."
+    ],
+    family: [
+      "Give fully-present, phone-away attention daily — presence they can feel beats time in the room.",
+      "Build the bond in calm moments; a strong friendship makes conflict survivable (Gottman).",
+      "In conflict, seek to understand before being understood; repair quickly and never stonewall.",
+      "Learn their love language and express care the way they actually receive it.",
+      "Keep rituals of connection: shared meals, check-ins, undivided one-on-one time."
+    ],
+    self: [
+      "Do what you said you'd do — small kept promises to yourself are votes for your identity (Atomic Habits).",
+      "Sharpen the saw: learn a little daily and practice one soft skill (7 Habits).",
+      "Stay honest and clean-tongued; integrity compounds trust with yourself and others.",
+      "Schedule true restoration — chosen rest that isn't the feed; recovery fuels output.",
+      "Begin with the end in mind: align today's actions with your values and long-term vision."
+    ]
+  };
+  var TIPS_KEY = "compounder.tips";
+  var tips = {};            // { hard:[...], money:[...], … } — user overrides; unset falls back to defaults
+  var tipsTs = 0;
+  var tipsOpenDom = null, tipEditing = null;
+  function tipsStoreKey() { return session ? (TIPS_KEY + "." + session.user.id) : TIPS_KEY; }
+  function loadTips() {
+    var k = tipsStoreKey();
+    try { var o = JSON.parse(localStorage.getItem(k)); if (o && typeof o === "object") { tips = o; tipsTs = (+localStorage.getItem(k + ".ts")) || 0; return; } } catch (e) {}
+    tips = {}; tipsTs = 0;
+  }
+  function persistTips() {
+    var k = tipsStoreKey();
+    localStorage.setItem(k, JSON.stringify(tips));
+    localStorage.setItem(k + ".ts", String(tipsTs));
+  }
+  function saveTips() { tipsTs = Date.now(); persistTips(); pushTips(); }
+  function pushTips() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert(
+      { user_id: session.user.id, tips: tips, tips_updated_at: new Date(tipsTs || Date.now()).toISOString() },
+      { onConflict: "user_id" }
+    ).then(function () {}, function () {});
+  }
+  function syncTips() {
+    if (!sb || !session) return;
+    sb.from("user_settings").select("tips,tips_updated_at").eq("user_id", session.user.id).maybeSingle()
+      .then(function (res) {
+        if (res.error) return; // column may not exist yet — silently skip
+        var r = res.data;
+        var rts = (r && r.tips_updated_at) ? Date.parse(r.tips_updated_at) : 0;
+        if (r && r.tips && rts > tipsTs) {
+          tips = r.tips; tipsTs = rts; persistTips();
+          if (tipsOpenDom && tipEditing == null) renderTips();
+        } else if (tipsTs > rts && Object.keys(tips).length) {
+          pushTips();
+        }
+      }, function () {});
+  }
+  function onAuthTips() { loadTips(); if (session) syncTips(); }
+  loadTips();
+
+  function getTips(key) { return tips[key] !== undefined ? tips[key] : (DEFAULT_TIPS[key] || []); }
+  function mutableTips(key) { var arr = getTips(key).slice(); tips[key] = arr; return arr; }
+  function tipAdd(key) {
+    var arr = mutableTips(key); arr.push("");
+    tipEditing = key + ":" + (arr.length - 1);
+    saveTips(); renderTips();
+  }
+  function tipCommit(id, val) {
+    var p = id.split(":"), key = p[0], idx = +p[1];
+    var arr = mutableTips(key);
+    val = (val || "").trim();
+    if (val) arr[idx] = val; else arr.splice(idx, 1); // empty removes the bullet
+    tipEditing = null;
+    saveTips(); renderTips();
+  }
+  function tipCommitAndAdd(id, val) {
+    if (!(val || "").trim()) { tipCommit(id, val); return; }
+    var p = id.split(":"), key = p[0], idx = +p[1];
+    var arr = mutableTips(key); arr[idx] = val.trim();
+    arr.splice(idx + 1, 0, "");
+    tipEditing = key + ":" + (idx + 1);
+    saveTips(); renderTips();
+  }
+  function tipDelete(id) {
+    var p = id.split(":"), key = p[0], idx = +p[1];
+    var arr = mutableTips(key); arr.splice(idx, 1);
+    saveTips(); renderTips();
+  }
+  function closeTips() {
+    tipsOpenDom = null; tipEditing = null;
+    document.body.style.overflow = "";
+    renderTips();
+  }
+  function renderTips() {
+    var modal = document.getElementById("tipsModal");
+    if (!modal) return;
+    if (!tipsOpenDom) { modal.className = "modal-backdrop"; modal.innerHTML = ""; return; }
+    var dom = null;
+    for (var i = 0; i < DOMAINS.length; i++) if (DOMAINS[i].key === tipsOpenDom) dom = DOMAINS[i];
+    if (!dom) { closeTips(); return; }
+    var color = wlColor(dom.key);
+    var list = getTips(dom.key);
+    var bullets = list.map(function (t, i) {
+      var id = dom.key + ":" + i;
+      if (tipEditing === id) {
+        return '<div class="tip-item"><span class="tip-dot" style="color:' + color + '">•</span>' +
+          '<textarea class="tip-in" data-tipinput="' + id + '" rows="1">' + escapeHtml(t) + '</textarea></div>';
+      }
+      return '<div class="tip-item"><span class="tip-dot" style="color:' + color + '">•</span>' +
+        '<span class="tip-text" data-tipedit="' + id + '">' + escapeHtml(t) + '</span>' +
+        '<button class="tip-del" data-tipdel="' + id + '" title="Remove">×</button></div>';
+    }).join("");
+    modal.className = "modal-backdrop open";
+    modal.innerHTML =
+      '<div class="modal" style="--dc:' + color + '">' +
+        '<div class="modal-head"><div>' +
+          '<div class="modal-title">' + escapeHtml(dom.name) + '</div>' +
+          '<div class="modal-sub">The ideal state to reach for</div>' +
+        '</div><button class="modal-close" data-tipclose title="Close">×</button></div>' +
+        '<div class="tips-list">' + (bullets || '<div class="tips-empty">No tips yet — add your own.</div>') + '</div>' +
+        '<button class="tips-add" data-tipadd="' + dom.key + '">+ tip</button>' +
+      '</div>';
+    document.body.style.overflow = "hidden";
+    var ta = modal.querySelector("[data-tipinput]");
+    if (ta) {
+      function grow() { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }
+      grow();
+      ta.addEventListener("input", grow);
+      ta.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") { ev.preventDefault(); tipCommitAndAdd(ta.getAttribute("data-tipinput"), ta.value); }
+        else if (ev.key === "Escape") { tipCommit(ta.getAttribute("data-tipinput"), ta.value); }
+      });
+      ta.addEventListener("blur", function () {
+        var id = ta.getAttribute("data-tipinput");
+        if (tipEditing !== id) return; // a newer editor took over — don't clobber
+        tipCommit(id, ta.value);
+      });
+      ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+  }
+  document.getElementById("tipsModal").addEventListener("click", function (ev) {
+    var t = ev.target, el;
+    if (t.id === "tipsModal") { closeTips(); return; } // click on the backdrop
+    if (t.closest("[data-tipclose]")) { closeTips(); return; }
+    if ((el = t.closest("[data-tipdel]"))) { tipDelete(el.getAttribute("data-tipdel")); return; }
+    if ((el = t.closest("[data-tipedit]"))) { tipEditing = el.getAttribute("data-tipedit"); renderTips(); return; }
+    if ((el = t.closest("[data-tipadd]"))) { tipAdd(el.getAttribute("data-tipadd")); return; }
+  });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && tipsOpenDom && tipEditing == null) closeTips(); });
+
   // ---- reward economy: spend today's earned points; nothing rolls over ----
   function buyReward(idx) {
     var r = rewardsCat[idx]; if (!r) return;
@@ -2553,6 +2767,7 @@
     onAuthIdentity(); // reload + reconcile per-dimension identity lines
     onAuthReviews();  // reload + reconcile weekly reviews
     onAuthGoals();    // reload + reconcile goals
+    onAuthTips();     // reload + reconcile per-dimension tips
     loadReminderPrefs();
     if (session) {
       claimAnonBoard();
