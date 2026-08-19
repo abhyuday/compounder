@@ -663,6 +663,34 @@
   .card-metric { flex: 0 0 auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px; margin-left: 2px; opacity: .85; }
   .card-metric:hover { opacity: 1; }
 
+  /* Compounder Score — composite ring, healthy zone, baseline marker, tips */
+  .scorecard { background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 18px; overflow: hidden; }
+  .sc-head { display: flex; align-items: center; gap: 15px; padding: 15px 16px; cursor: pointer; }
+  .sc-ring { flex: 0 0 auto; width: 92px; height: 92px; position: relative; }
+  .sc-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
+  .sc-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .sc-num { font-size: 29px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .sc-den { font-size: 10.5px; color: var(--faint); margin-top: 1px; letter-spacing: .02em; }
+  .sc-meta { flex: 1; min-width: 0; }
+  .sc-band { font-size: 16.5px; font-weight: 700; line-height: 1.15; }
+  .sc-sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
+  .sc-delta { font-weight: 700; }
+  .sc-delta.up { color: var(--done); } .sc-delta.down { color: var(--comfort); } .sc-delta.flat { color: var(--faint); }
+  .sc-chev { align-self: flex-start; margin-top: 3px; color: var(--faint); font-size: 11px; transition: transform .2s ease; flex: 0 0 auto; }
+  .scorecard.open .sc-chev { transform: rotate(180deg); }
+  .sc-body { border-top: 1px solid var(--border); padding: 15px 16px 16px; }
+  .sc-levers { display: flex; flex-direction: column; gap: 12px; }
+  .sc-lever-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12.5px; margin-bottom: 5px; }
+  .sc-lever-name { color: var(--text); font-weight: 600; }
+  .sc-lever-val { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+  .sc-bar { height: 7px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+  .sc-bar-fill { height: 100%; border-radius: 4px; transition: width .35s ease; }
+  .sc-tips { margin-top: 15px; border-top: 1px solid var(--border); padding-top: 13px; display: flex; flex-direction: column; gap: 10px; }
+  .sc-tip { display: flex; gap: 9px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .sc-tip b { color: var(--text); font-weight: 600; }
+  .sc-tip-ic { flex: 0 0 auto; }
+  .sc-legend { font-size: 11px; color: var(--faint); margin-top: 13px; line-height: 1.55; }
+
   /* YouTube summarizer: header icon + modal */
   .yt-btn { background: none; border: none; cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 4px; margin-left: 2px; opacity: .8; filter: grayscale(.2); }
   .yt-btn:hover { opacity: 1; filter: none; }
@@ -729,6 +757,8 @@
   </header>
 
   <section class="auth-panel" id="authPanel"></section>
+
+  <section class="scorecard" id="scoreCard"></section>
 
   <section class="toolgroup" id="toolgroup">
     <button class="toolgroup-bar" id="toolgroupBar" aria-expanded="false">
@@ -2221,6 +2251,214 @@
   });
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && metricDraft) closeMetricLog(); });
 
+  // ======================= Compounder Score (composite 0–100; derived, not scored-into) =======================
+  // A rolling health-of-system score over a trailing 4-week window, blending four
+  // ingredients the user chose: Consistency, Balance, Target adherence, Momentum.
+  // Deliberately tuned so hitting the ~25 target in balance settles into a "healthy zone"
+  // (~80–92) rather than demanding a perfect 100 — reaching 100 needs a still-improving
+  // stretch, so a plateau at a healthy level scores high without ever rewarding the 5/5
+  // grind. Baseline = the same formula over the user's first weeks (a fixed starting line).
+  var SCORE_WINDOW = 28;                    // trailing days for the current score
+  var SCORE_BASELINE_DAYS = 21;             // first N days of history define the baseline
+  var HEALTHY_RATE = TARGET / WEEK_MAX;     // per-dimension hit-rate that equals target (25/35 ≈ .714)
+  var SCORE_W = { consistency: 0.30, balance: 0.30, target: 0.25, momentum: 0.15 };
+  var HEALTHY_ZONE = [80, 92];
+  var SCORE_BANDS = [
+    { min: 0,  name: "Finding footing", col: "#8793a2" },
+    { min: 40, name: "Building",        col: "#d9a441" },
+    { min: 65, name: "Compounding",     col: "#e0b050" },
+    { min: 80, name: "Thriving",        col: "#3fb950" },  // the healthy zone
+    { min: 93, name: "Surging",         col: "#5ad06a" }
+  ];
+  function clampN(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+  function scoreBand(s) { var b = SCORE_BANDS[0]; for (var i = 0; i < SCORE_BANDS.length; i++) if (s >= SCORE_BANDS[i].min) b = SCORE_BANDS[i]; return b; }
+  function dayKeysBetween(startKey, endKey) {
+    var out = [], d = parseKey(startKey), end = parseKey(endKey);
+    while (d <= end) { out.push(ymd(d)); d = addDays(d, 1); }
+    return out;
+  }
+  // Full breakdown over the trailing window ending at endKey, clamped to tracked history.
+  // Fully parameterized by endKey (no hidden "today"), so the same function computes the
+  // baseline by passing an early end date.
+  function computeScoreAt(endKey) {
+    endKey = endKey || todayKey;
+    var earliest = earliestDayKey();
+    if (!earliest) return null;
+    var winStart = ymd(addDays(parseKey(endKey), -(SCORE_WINDOW - 1)));
+    if (winStart < earliest) winStart = earliest;
+    var keys = dayKeysBetween(winStart, endKey);
+    var den = keys.length;
+    if (den < 1) return null;
+
+    // 1) Consistency — share of elapsed days that moved the needle (≥1 pt).
+    var moved = 0;
+    keys.forEach(function (k) { if (dayPoints(k) >= 1) moved++; });
+    var C = 100 * (moved / den);
+
+    // 2) Balance — half average coverage, half the weakest dimension. Each dimension's
+    //    coverage is its hit-rate capped at the healthy rate (no reward for exceeding it).
+    var dims = DOMAINS.map(function (dom) {
+      var hit = 0; keys.forEach(function (k) { if (domDone(dayEntry(k), dom.key)) hit++; });
+      var rate = hit / den;
+      return { key: dom.key, name: dom.name, rate: rate, cover: clampN(rate / HEALTHY_RATE, 0, 1) };
+    });
+    var meanCover = dims.reduce(function (a, d) { return a + d.cover; }, 0) / dims.length;
+    var minCover = dims.reduce(function (a, d) { return Math.min(a, d.cover); }, 1);
+    var B = 100 * (0.5 * meanCover + 0.5 * minCover);
+
+    // 3) Target adherence — each week's points vs the 25 target, capped at 1 (no credit
+    //    toward 35). Clamped/partial weeks are prorated so they aren't unfairly short.
+    var adhs = [], wkEndD = parseKey(endKey);
+    for (var w = 0; w < 4; w++) {
+      var segEndD = addDays(wkEndD, -7 * w), segStartD = addDays(segEndD, -6);
+      var sEndK = ymd(segEndD), sStartK = ymd(segStartD);
+      if (sEndK < earliest) break;
+      if (sStartK < earliest) sStartK = earliest;
+      var wk = dayKeysBetween(sStartK, sEndK), pts = 0;
+      wk.forEach(function (k) { pts += dayPoints(k); });
+      var tgt = TARGET * (wk.length / 7);
+      if (tgt > 0) adhs.push(clampN(pts / tgt, 0, 1));
+    }
+    var T = adhs.length ? 100 * (adhs.reduce(function (a, x) { return a + x; }, 0) / adhs.length) : 0;
+
+    // 4) Momentum — trailing-window avg daily points vs the prior window. Neutral (50)
+    //    without enough prior history so it doesn't distort the early score.
+    function avgDaily(sK, eK) {
+      if (eK < earliest) return null;
+      if (sK < earliest) sK = earliest;
+      var ks = dayKeysBetween(sK, eK); if (!ks.length) return null;
+      var p = 0; ks.forEach(function (k) { p += dayPoints(k); });
+      return p / ks.length;
+    }
+    var recentAvg = avgDaily(winStart, endKey);
+    var priorEnd = ymd(addDays(parseKey(winStart), -1));
+    var priorStart = ymd(addDays(parseKey(priorEnd), -(SCORE_WINDOW - 1)));
+    var priorAvg = avgDaily(priorStart, priorEnd);
+    var M = 50, mDelta = null;
+    if (recentAvg != null && priorAvg != null) { mDelta = recentAvg - priorAvg; M = clampN(50 + 30 * mDelta, 0, 100); }
+
+    var score = Math.round(SCORE_W.consistency * C + SCORE_W.balance * B + SCORE_W.target * T + SCORE_W.momentum * M);
+    return { score: score, den: den, moved: moved, missed: den - moved, C: C, B: B, T: T, M: M,
+      dims: dims, momentumDelta: mDelta, weekPtsAvg: recentAvg != null ? recentAvg * 7 : null, band: scoreBand(score) };
+  }
+  // Baseline: the score over the first SCORE_BASELINE_DAYS of history — a fixed starting
+  // line. Passing that early end date to computeScoreAt clamps the window to exactly the
+  // first N days (and momentum lands neutral, since there's no prior window).
+  function computeBaseline() {
+    var earliest = earliestDayKey();
+    if (!earliest) return null;
+    var startD = parseKey(earliest);
+    var elapsed = Math.floor((parseKey(todayKey) - startD) / 86400000) + 1;
+    if (elapsed < SCORE_BASELINE_DAYS) return { forming: true, daysLeft: SCORE_BASELINE_DAYS - elapsed };
+    var sc = computeScoreAt(ymd(addDays(startD, SCORE_BASELINE_DAYS - 1)));
+    return { forming: false, score: sc ? sc.score : null };
+  }
+  function weakestDim(sc) { var w = sc.dims[0]; sc.dims.forEach(function (d) { if (d.rate < w.rate) w = d; }); return w; }
+  // Tips: rank the four levers by marginal points still on the table (weight × headroom),
+  // then speak to the biggest one, plus always surface the weakest dimension.
+  function scoreTips(sc) {
+    var out = [], levers = [
+      { key: "consistency", val: sc.C, w: SCORE_W.consistency },
+      { key: "balance",     val: sc.B, w: SCORE_W.balance },
+      { key: "target",      val: sc.T, w: SCORE_W.target },
+      { key: "momentum",    val: sc.M, w: SCORE_W.momentum }
+    ];
+    levers.sort(function (a, b) { return (b.w * (100 - b.val)) - (a.w * (100 - a.val)); });
+    function tipFor(key) {
+      if (key === "consistency") {
+        if (sc.missed <= 0) return null;
+        return { icon: "🔗", text: "<b>Consistency</b> is your biggest lever — you moved the needle on <b>" + sc.moved + " of " + sc.den + "</b> days. Just <b>1 point today</b> keeps the chain. That's the whole game." };
+      }
+      if (key === "balance") {
+        var w = weakestDim(sc);
+        return { icon: "⚖️", text: "<b>Balance</b> is your biggest lever. <b>" + escapeHtml(w.name) + "</b> is the weak link — " + Math.round(w.rate * 100) + "% of days vs a healthy " + Math.round(HEALTHY_RATE * 100) + "%. One deliberate " + escapeHtml(w.name) + " hit this week lifts your score most." };
+      }
+      if (key === "target") {
+        var avg = sc.weekPtsAvg != null ? Math.round(sc.weekPtsAvg) : null;
+        return { icon: "🎯", text: "<b>Target adherence</b> has the most room." + (avg != null ? " You're averaging <b>~" + avg + "/week</b>; nudge toward 25." : "") + " You don't need 35 — just the healthy zone." };
+      }
+      if (sc.momentumDelta != null && sc.momentumDelta < 0)
+        return { icon: "📉", text: "<b>Momentum</b> dipped — you're <b>" + sc.momentumDelta.toFixed(1) + " pt/day</b> below last month. One extra needle-moved day this week flips the trend." };
+      return { icon: "📈", text: "<b>Momentum</b> is where the room is. A small, steady lift sustained over the month is what compounds fastest." };
+    }
+    var primary = tipFor(levers[0].key) || tipFor(levers[1].key);
+    if (primary) out.push(primary);
+    if (levers[0].key !== "balance") {
+      var w = weakestDim(sc);
+      if (w && w.rate < HEALTHY_RATE) out.push({ icon: "🫥", text: "Weakest dimension: <b>" + escapeHtml(w.name) + "</b> at " + Math.round(w.rate * 100) + "% of days. Give it one intentional hit this week." });
+    }
+    return out.slice(0, 2);
+  }
+
+  var scoreOpen = false;
+  function ringSVG(sc, base) {
+    var r = 44, cx = 60, cy = 60, CIRC = 2 * Math.PI * r;
+    function seg(offsetFrac, lenFrac, color, width, cap) {
+      var len = clampN(lenFrac, 0, 1) * CIRC;
+      return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + width + '"' +
+        (cap ? ' stroke-linecap="round"' : '') +
+        ' stroke-dasharray="' + len.toFixed(2) + ' ' + (CIRC - len).toFixed(2) + '"' +
+        ' stroke-dashoffset="' + (-offsetFrac * CIRC).toFixed(2) + '"/>';
+    }
+    var track = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--panel-2)" stroke-width="10"/>';
+    var zone = seg(HEALTHY_ZONE[0] / 100, (HEALTHY_ZONE[1] - HEALTHY_ZONE[0]) / 100, "rgba(63,185,80,0.32)", 10, false);
+    var fill = seg(0, sc.score / 100, sc.band.col, 10, true);
+    var tick = (base && !base.forming && base.score != null)
+      ? seg(base.score / 100 - 0.006, 0.012, "var(--text)", 13, false) : "";
+    return '<svg viewBox="0 0 120 120">' + track + zone + fill + tick + '</svg>';
+  }
+  function renderScore() {
+    var host = document.getElementById("scoreCard");
+    if (!host) return;
+    var sc = computeScoreAt(todayKey);
+    host.className = "scorecard" + (scoreOpen ? " open" : "");
+    if (!sc) {
+      host.innerHTML = '<div class="sc-head" data-sctoggle>' +
+        '<div class="sc-ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="44" fill="none" stroke="var(--panel-2)" stroke-width="10"/></svg>' +
+        '<div class="sc-center"><div class="sc-num" style="color:var(--faint)">–</div></div></div>' +
+        '<div class="sc-meta"><div class="sc-band">Your Score</div><div class="sc-sub">Log your first day to start your Compounder Score.</div></div></div>';
+      return;
+    }
+    var base = computeBaseline();
+    var col = sc.band.col;
+    var deltaHtml;
+    if (base && !base.forming && base.score != null) {
+      var d = sc.score - base.score, cls = d > 0 ? "up" : d < 0 ? "down" : "flat", arrow = d > 0 ? "▲" : d < 0 ? "▼" : "▪";
+      deltaHtml = '<span class="sc-delta ' + cls + '">' + arrow + " " + (d > 0 ? "+" : "") + d + '</span> since baseline (' + base.score + ")";
+    } else if (base && base.forming) {
+      deltaHtml = "Baseline forms in <b style='color:var(--muted)'>" + base.daysLeft + "</b> day" + (base.daysLeft === 1 ? "" : "s");
+    } else { deltaHtml = "Trailing 4 weeks"; }
+    var head = '<div class="sc-head" data-sctoggle>' +
+      '<div class="sc-ring">' + ringSVG(sc, base) +
+        '<div class="sc-center"><div class="sc-num" style="color:' + col + '">' + sc.score + '</div><div class="sc-den">/ 100</div></div></div>' +
+      '<div class="sc-meta"><div class="sc-band" style="color:' + col + '">' + sc.band.name + '</div>' +
+        '<div class="sc-sub">' + deltaHtml + '</div></div>' +
+      '<span class="sc-chev">▾</span></div>';
+    var body = "";
+    if (scoreOpen) {
+      var mNote = sc.momentumDelta != null ? ((sc.momentumDelta >= 0 ? "+" : "") + sc.momentumDelta.toFixed(1) + " pt/day vs last month") : "neutral";
+      var levers = [
+        { name: "Consistency", val: sc.C, note: sc.moved + "/" + sc.den + " days moved" },
+        { name: "Balance",     val: sc.B, note: "weak link: " + weakestDim(sc).name },
+        { name: "Target",      val: sc.T, note: sc.weekPtsAvg != null ? "~" + Math.round(sc.weekPtsAvg) + "/wk" : "" },
+        { name: "Momentum",    val: sc.M, note: mNote }
+      ];
+      var bars = levers.map(function (l) {
+        return '<div class="sc-lever"><div class="sc-lever-top"><span class="sc-lever-name">' + l.name + '</span>' +
+          '<span class="sc-lever-val">' + Math.round(l.val) + (l.note ? " · " + escapeHtml(l.note) : "") + '</span></div>' +
+          '<div class="sc-bar"><div class="sc-bar-fill" style="width:' + Math.round(l.val) + '%;background:' + col + '"></div></div></div>';
+      }).join("");
+      var tips = scoreTips(sc).map(function (t) { return '<div class="sc-tip"><span class="sc-tip-ic">' + t.icon + '</span><span>' + t.text + '</span></div>'; }).join("");
+      body = '<div class="sc-body"><div class="sc-levers">' + bars + '</div>' +
+        (tips ? '<div class="sc-tips">' + tips + '</div>' : "") +
+        '<div class="sc-legend">Trailing 4 weeks. The green band is the healthy zone — hitting ~25/week in balance settles here. Reaching 100 needs a still-improving month, by design: a perfect week is a trap.</div></div>';
+    }
+    host.innerHTML = head + body;
+  }
+  document.getElementById("scoreCard").addEventListener("click", function (ev) {
+    if (ev.target.closest("[data-sctoggle]")) { scoreOpen = !scoreOpen; renderScore(); }
+  });
+
   // ======================= Tips per dimension (editable, synced) =======================
   // A modal of "ideal state" bullets for each pillar, seeded from popular sources
   // and fully editable. The aim: follow these to maximize that area with the least
@@ -2838,6 +3076,7 @@
   });
 
   function renderAll() {
+    renderScore();
     renderDaySwitch();
     if (!anyEditorFocused()) renderCards(); // don't steal focus while a note/why is being typed
     renderToday();
