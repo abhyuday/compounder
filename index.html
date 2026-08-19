@@ -170,6 +170,7 @@
   #rewards .rew-bal.has { color: var(--accent); font-weight: 600; }
   #rewards .chev { margin-left: 10px; }
   .rew-tally { font-size: 12.5px; color: var(--muted); padding: 6px 10px 10px; }
+  .rew-empty { font-size: 12.5px; color: var(--faint); padding: 2px 10px 10px; }
   .rew-tally b { color: var(--text); font-variant-numeric: tabular-nums; }
   .rew-tally b.pos { color: var(--accent); }
   .rew-logs { padding: 0 10px 6px; display: flex; flex-direction: column; gap: 4px; }
@@ -2310,18 +2311,22 @@
     host.innerHTML = now + body;
   }
 
-  // ======================= Rewards strip (today's wallet) =======================
+  // ======================= Rewards strip (wallet for the day in view) =======================
+  // Today is the interactive wallet (buy/undo/edit); past days show that day's
+  // purchase log read-only, so buys are never "lost" — just historical.
   function renderRewards() {
     var host = document.getElementById("rewards");
     host.className = "sched" + (rewardsOpen ? " open" : "");
-    var earned = dayPoints(todayKey), spent = spentOn(todayKey), bal = earned - spent;
+    var key = selectedKey, isToday = key === todayKey;
+    var earned = dayPoints(key), spent = spentOn(key), bal = earned - spent;
     var now = '<div class="sched-now" data-ract="toggle">' +
       '<span class="rew-emoji">🎁</span>' +
       '<span class="lbl">Rewards</span>' +
-      '<span class="rew-bal' + (bal > 0 ? " has" : "") + '">' + bal + ' to spend</span>' +
+      '<span class="rew-bal' + (isToday && bal > 0 ? " has" : "") + '">' +
+        (isToday ? (bal + ' to spend') : (spent > 0 ? ('−' + spent + ' spent') : 'none spent')) + '</span>' +
       '<span class="chev">▾</span></div>';
     var body = "";
-    if (rewardsOpen && rewardsEditing) {
+    if (rewardsOpen && rewardsEditing && isToday) {
       body = '<div class="sched-body">' + rewardsCat.map(function (r, i) {
         return '<div class="blk edit" data-ridx="' + i + '">' +
           '<input class="rlabel-in" value="' + escapeHtml(r.label) + '" placeholder="Reward">' +
@@ -2335,24 +2340,26 @@
           '<button class="lnk muted" data-ract="reset">Reset</button>' +
         '</div></div>';
     } else if (rewardsOpen) {
-      var tally = '<div class="rew-tally">Today · <b>' + earned + '</b> earned · <b>' + spent + '</b> spent · <b class="' + (bal > 0 ? "pos" : "") + '">' + bal + '</b> to spend</div>';
-      var e = data[todayKey];
+      var dayName = isToday ? "Today" : dayLabel(key);
+      var tally = '<div class="rew-tally">' + escapeHtml(dayName) + ' · <b>' + earned + '</b> earned · <b>' + spent + '</b> spent' +
+        (isToday ? ' · <b class="' + (bal > 0 ? "pos" : "") + '">' + bal + '</b> to spend' : '') + '</div>';
+      var e = data[key];
       var logs = (e && e.rewards && e.rewards.length)
         ? '<div class="rew-logs">' + e.rewards.map(function (x, i) {
             return '<div class="rew-log"><span class="rew-logl">✓ ' + escapeHtml(x.label) + '</span><span class="rew-logc">−' + (+x.cost || 0) + '</span>' +
-              '<button class="rew-undo" data-undo="' + i + '" title="Undo">×</button></div>';
+              (isToday ? '<button class="rew-undo" data-undo="' + i + '" title="Undo">×</button>' : '') + '</div>';
           }).join("") + '</div>'
-        : "";
-      var items = '<div class="rew-list">' + rewardsCat.map(function (r, i) {
+        : (isToday ? "" : '<div class="rew-empty">No rewards bought this day.</div>');
+      var items = isToday ? '<div class="rew-list">' + rewardsCat.map(function (r, i) {
         var afford = bal >= (+r.cost || 0);
         return '<div class="rew-item">' +
           '<span class="rew-label">' + escapeHtml(r.label) + '</span>' +
           '<span class="rew-cost">' + (+r.cost || 0) + ' pt</span>' +
           '<button class="rew-buy" data-buy="' + i + '"' + (afford ? "" : " disabled") + '>Buy</button>' +
           '</div>';
-      }).join("") + '</div>';
-      body = '<div class="sched-body">' + tally + logs + items +
-        '<div class="sched-actions"><button class="lnk" data-ract="edit">Edit rewards</button></div></div>';
+      }).join("") + '</div>' : "";
+      var actions = isToday ? '<div class="sched-actions"><button class="lnk" data-ract="edit">Edit rewards</button></div>' : "";
+      body = '<div class="sched-body">' + tally + logs + items + actions + '</div>';
     }
     host.innerHTML = now + body;
   }
