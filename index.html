@@ -620,6 +620,49 @@
   .tips-empty { font-size: 13px; color: var(--faint); padding: 10px 6px; }
   .tips-add { display: block; background: none; border: none; color: var(--dc, var(--accent)); font-size: 13.5px; font-weight: 600; cursor: pointer; padding: 8px 6px 4px; }
 
+  /* Health metrics — objective, occasional readings; decoupled from the point system */
+  #metrics .rew-emoji { font-size: 15px; flex: 0 0 auto; }
+  #metrics .hist-sum { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #metrics .hist-sum .mh-val { color: var(--text); font-weight: 600; }
+  #metrics .hist-sum .mh-val.stale { color: var(--faint); font-weight: 500; }
+  #metrics .hist-sum .mh-d { color: var(--faint); margin-left: 7px; }
+  #metrics .chev { margin-left: 10px; }
+  .met-row { padding: 12px 12px 14px; }
+  .met-row + .met-row { border-top: 1px solid var(--border); }
+  .met-top { display: flex; align-items: baseline; gap: 8px; }
+  .met-name { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .met-figs { display: flex; align-items: baseline; gap: 7px; margin-top: 3px; }
+  .met-big { font-size: 27px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.05; }
+  .met-big.stale { color: var(--faint); }
+  .met-unit { font-size: 13px; color: var(--faint); font-weight: 600; }
+  .met-log { margin-left: auto; align-self: center; background: var(--health); color: #06210c; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
+  .met-log:active { filter: brightness(.92); }
+  .met-note { font-size: 11.5px; color: var(--faint); margin-top: 4px; }
+  .met-spark { margin-top: 12px; width: 100%; height: auto; display: block; overflow: visible; }
+  .met-spark .sp-line { fill: none; stroke: var(--health); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .met-spark .sp-dot { fill: var(--faint); opacity: .5; }
+  .met-spark .sp-last { fill: var(--health); }
+  .met-deltas { display: flex; gap: 18px; margin-top: 10px; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .met-deltas b { color: var(--muted); font-weight: 600; }
+  .met-empty { font-size: 13px; color: var(--faint); padding: 2px 2px 6px; }
+
+  /* Log sheet (bottom sheet, reuses .modal-backdrop / .modal) */
+  .met-stepper { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 20px 0 4px; }
+  .met-step { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); width: 52px; height: 52px; border-radius: 50%; font-size: 24px; cursor: pointer; line-height: 1; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; user-select: none; }
+  .met-step:active { background: var(--border); }
+  .met-val-wrap { display: flex; flex-direction: column; align-items: center; min-width: 140px; }
+  .met-val-in { width: 150px; text-align: center; background: none; border: none; border-bottom: 2px solid var(--border); color: var(--text); font-size: 42px; font-weight: 700; font-variant-numeric: tabular-nums; padding: 2px 0; outline: none; font-family: inherit; }
+  .met-val-in:focus { border-bottom-color: var(--health); }
+  .met-val-unit { font-size: 13px; color: var(--faint); margin-top: 6px; }
+  .met-dates { display: flex; gap: 8px; justify-content: center; margin: 18px 0 2px; }
+  .met-date { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 8px 18px; font-size: 13px; cursor: pointer; font-weight: 600; }
+  .met-date.on { background: var(--health); border-color: var(--health); color: #06210c; }
+  .met-prev { text-align: center; font-size: 12px; color: var(--faint); margin-top: 10px; }
+  .met-save { display: block; width: 100%; margin-top: 14px; background: var(--health); color: #06210c; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; padding: 13px; cursor: pointer; }
+  .met-save:active { filter: brightness(.92); }
+  .card-metric { flex: 0 0 auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px; margin-left: 2px; opacity: .85; }
+  .card-metric:hover { opacity: 1; }
+
   /* YouTube summarizer: header icon + modal */
   .yt-btn { background: none; border: none; cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 4px; margin-left: 2px; opacity: .8; filter: grayscale(.2); }
   .yt-btn:hover { opacity: 1; filter: none; }
@@ -704,6 +747,8 @@
 
       <section class="sched" id="goals"></section>
 
+      <section class="sched" id="metrics"></section>
+
       <section class="week">
         <div class="week-top">
           <span class="week-label" id="weekLabel">This week <span class="week-streak" id="weekStreak"></span></span>
@@ -752,6 +797,7 @@
 </div>
 
 <div class="modal-backdrop" id="tipsModal"></div>
+<div class="modal-backdrop" id="metricModal"></div>
 <div class="modal-backdrop" id="ytModal"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1116,6 +1162,7 @@
           '<div class="flex-title"><div class="domain">' + dom.name +
             (startHere ? ' <span class="start-here">start here</span>' : "") + '</div>' + whyHtml + '</div>' +
           '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
+          (dom.key === "health" ? '<button class="card-metric" data-metricbtn title="Log weight & metrics">⚖️</button>' : "") +
           '<button class="card-tips" data-tips="' + dom.key + '" title="Tips — the ideal to reach for">💡</button>' +
           '<button class="card-collapse" data-collapse="' + dom.key + '" title="Collapse">▴</button>' +
         '</div>' +
@@ -1159,6 +1206,8 @@
       if (cbtn) cbtn.addEventListener("click", function (ev) { ev.stopPropagation(); collapseThisCard(); });
       var tbtn = card.querySelector("[data-tips]");
       if (tbtn) tbtn.addEventListener("click", function (ev) { ev.stopPropagation(); tipsOpenDom = dom.key; tipEditing = null; renderTips(); });
+      var mbtn = card.querySelector("[data-metricbtn]");
+      if (mbtn) mbtn.addEventListener("click", function (ev) { ev.stopPropagation(); openMetricLog("weight"); });
       var head = card.querySelector(".card-head");
       if (head) {
         head.style.cursor = "pointer";
@@ -1928,6 +1977,250 @@
     if (t.closest("[data-gact]")) { goalsOpen = !goalsOpen; renderGoals(); return; }
   });
 
+  // ======================= Health metrics (objective, occasional; decoupled from points) =======================
+  // A catalog of numeric metrics recorded now and then — weight ships first. Readings are
+  // dated (one per day, honoring the same current+previous-day edit window as the board),
+  // synced via user_settings.metrics jsonb, and never touch points, wallet, or streaks.
+  var METRICS_KEY = "compounder.metrics";
+  var DEFAULT_METRICS = {
+    weight: { id: "weight", label: "Weight", unit: "lb", precision: 1, step: 0.2, series: [] }
+  };
+  var metrics = {};
+  var metricsTs = 0;
+  var metricsOpen = false;
+  var metricDraft = null; // { id, value, date } while the log sheet is open
+  function metricsStoreKey() { return session ? (METRICS_KEY + "." + session.user.id) : METRICS_KEY; }
+  // Guarantee each default metric's definition exists (label/unit/step) without inventing
+  // readings — so an empty series never bumps the timestamp or clobbers a synced copy.
+  function ensureMetrics() {
+    if (!metrics || typeof metrics !== "object") metrics = {};
+    for (var k in DEFAULT_METRICS) {
+      var d = DEFAULT_METRICS[k];
+      if (!metrics[k]) metrics[k] = { id: k, label: d.label, unit: d.unit, precision: d.precision, step: d.step, series: [] };
+      if (!Array.isArray(metrics[k].series)) metrics[k].series = [];
+    }
+  }
+  function loadMetrics() {
+    var k = metricsStoreKey();
+    try { var o = JSON.parse(localStorage.getItem(k)); if (o && typeof o === "object") { metrics = o; metricsTs = (+localStorage.getItem(k + ".ts")) || 0; ensureMetrics(); return; } } catch (e) {}
+    metrics = {}; metricsTs = 0; ensureMetrics();
+  }
+  function persistMetrics() {
+    var k = metricsStoreKey();
+    localStorage.setItem(k, JSON.stringify(metrics));
+    localStorage.setItem(k + ".ts", String(metricsTs));
+  }
+  function saveMetrics() { metricsTs = Date.now(); persistMetrics(); pushMetrics(); }
+  function pushMetrics() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert(
+      { user_id: session.user.id, metrics: metrics, metrics_updated_at: new Date(metricsTs || Date.now()).toISOString() },
+      { onConflict: "user_id" }
+    ).then(function () {}, function () {});
+  }
+  function hasAnyReading() { for (var k in metrics) if (metrics[k].series && metrics[k].series.length) return true; return false; }
+  function syncMetrics() {
+    if (!sb || !session) return;
+    sb.from("user_settings").select("metrics,metrics_updated_at").eq("user_id", session.user.id).maybeSingle()
+      .then(function (res) {
+        if (res.error) return; // column may not exist yet — silently skip
+        var r = res.data;
+        var rts = (r && r.metrics_updated_at) ? Date.parse(r.metrics_updated_at) : 0;
+        if (r && r.metrics && typeof r.metrics === "object" && rts > metricsTs) {
+          metrics = r.metrics; metricsTs = rts; ensureMetrics(); persistMetrics();
+          if (!metricDraft) renderMetrics();
+        } else if (metricsTs > rts && hasAnyReading()) {
+          pushMetrics();
+        }
+      }, function () {});
+  }
+  function onAuthMetrics() { loadMetrics(); if (session) syncMetrics(); }
+  loadMetrics();
+
+  function fmtMetric(m, v) { return (v == null || isNaN(+v)) ? "—" : Number(v).toFixed(m.precision); }
+  function metricSorted(m) { return (m.series || []).slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; }); }
+  function metricLatest(m) { var s = metricSorted(m); return s.length ? s[s.length - 1] : null; }
+  // Exponential moving average across readings — smooths day-to-day noise so the trend
+  // reads clearly rather than as jitter. alpha ~ 2/(N+1) for an ~7-reading window.
+  function metricEMA(series) {
+    var a = 2 / 8, out = [], prev = null;
+    for (var i = 0; i < series.length; i++) {
+      var v = series[i].value;
+      prev = (prev == null) ? v : (a * v + (1 - a) * prev);
+      out.push({ date: series[i].date, value: prev });
+    }
+    return out;
+  }
+  // Signed change from the latest reading vs. the newest reading at least `days` old
+  // (falls back to the earliest). null when there's nothing to compare.
+  function metricDeltaOver(m, days) {
+    var s = metricSorted(m); if (s.length < 2) return null;
+    var latest = s[s.length - 1];
+    var cutoff = parseKey(latest.date).getTime() - days * 86400000;
+    var base = null;
+    for (var i = s.length - 2; i >= 0; i--) { if (parseKey(s[i].date).getTime() <= cutoff) { base = s[i]; break; } }
+    if (!base) { if (parseKey(s[0].date).getTime() >= cutoff) return null; base = s[0]; }
+    return latest.value - base.value;
+  }
+  function metricStaleDays(m) { var l = metricLatest(m); if (!l) return null; return Math.round((parseKey(todayKey).getTime() - parseKey(l.date).getTime()) / 86400000); }
+  function signed(v, p) { return (v >= 0 ? "+" : "") + v.toFixed(p); }
+
+  function metricSparkSVG(m) {
+    var s = metricSorted(m);
+    if (s.length < 2) return "";
+    var W = 300, H = 72, padX = 5, padY = 9;
+    var ema = metricEMA(s);
+    var all = s.map(function (p) { return p.value; }).concat(ema.map(function (p) { return p.value; }));
+    var min = Math.min.apply(null, all), max = Math.max.apply(null, all);
+    var span = (max - min) || 1;
+    var t0 = parseKey(s[0].date).getTime(), t1 = parseKey(s[s.length - 1].date).getTime();
+    var tspan = (t1 - t0) || 1;
+    function X(d) { return padX + (parseKey(d).getTime() - t0) / tspan * (W - 2 * padX); }
+    function Y(v) { return padY + (1 - (v - min) / span) * (H - 2 * padY); }
+    var dots = s.map(function (p, i) {
+      var last = i === s.length - 1;
+      return '<circle class="' + (last ? "sp-last" : "sp-dot") + '" cx="' + X(p.date).toFixed(1) + '" cy="' + Y(p.value).toFixed(1) + '" r="' + (last ? 3 : 2) + '"/>';
+    }).join("");
+    var path = ema.map(function (p, i) { return (i ? "L" : "M") + X(p.date).toFixed(1) + " " + Y(p.value).toFixed(1); }).join(" ");
+    return '<svg class="met-spark" viewBox="0 0 ' + W + ' ' + H + '"><path class="sp-line" d="' + path + '"/>' + dots + '</svg>';
+  }
+
+  function metricPrimary() { return metrics.weight || metrics[Object.keys(metrics)[0]]; }
+  function renderMetrics() {
+    var host = document.getElementById("metrics");
+    if (!host) return;
+    host.className = "sched" + (metricsOpen ? " open" : "");
+    var pm = metricPrimary();
+    var lat = pm ? metricLatest(pm) : null;
+    var stale = pm ? metricStaleDays(pm) : null;
+    var summary;
+    if (lat) {
+      var d30 = metricDeltaOver(pm, 30);
+      summary = '<span class="mh-val' + (stale != null && stale >= 14 ? " stale" : "") + '">' + fmtMetric(pm, lat.value) + " " + escapeHtml(pm.unit) + "</span>" +
+        (d30 != null ? '<span class="mh-d">30d ' + signed(d30, pm.precision) + "</span>" : "");
+    } else {
+      summary = '<span class="mh-val stale">no readings yet</span>';
+    }
+    var now = '<div class="sched-now" data-mact="toggle">' +
+      '<span class="rew-emoji">⚖️</span><span class="lbl">Metrics</span>' +
+      '<span class="hist-sum">' + summary + '</span><span class="chev">▾</span></div>';
+    var body = "";
+    if (metricsOpen) {
+      body = '<div class="sched-body">' + Object.keys(metrics).map(function (k) { return metricRowHtml(metrics[k]); }).join("") + '</div>';
+    }
+    host.innerHTML = now + body;
+  }
+  function metricRowHtml(m) {
+    var lat = metricLatest(m);
+    var stale = metricStaleDays(m);
+    var isStale = stale != null && stale >= 14;
+    var figs = lat
+      ? '<span class="met-big' + (isStale ? " stale" : "") + '">' + fmtMetric(m, lat.value) + '</span><span class="met-unit">' + escapeHtml(m.unit) + '</span>'
+      : '<span class="met-empty">No readings yet — tap Log to start the trend.</span>';
+    var note = lat ? '<div class="met-note">last: ' + daysAgoLabel(lat.date) + (isStale ? " · getting stale" : "") + '</div>' : "";
+    var d30 = metricDeltaOver(m, 30), d90 = metricDeltaOver(m, 90);
+    var deltas = (d30 != null || d90 != null)
+      ? '<div class="met-deltas">' +
+          (d30 != null ? '<span>30d <b>' + signed(d30, m.precision) + " " + escapeHtml(m.unit) + '</b></span>' : "") +
+          (d90 != null ? '<span>90d <b>' + signed(d90, m.precision) + " " + escapeHtml(m.unit) + '</b></span>' : "") +
+        '</div>'
+      : "";
+    return '<div class="met-row">' +
+        '<div class="met-top"><span class="met-name">' + escapeHtml(m.label) + '</span>' +
+          '<button class="met-log" data-mlog="' + escapeHtml(m.id) + '">+ log</button></div>' +
+        '<div class="met-figs">' + figs + '</div>' + note + metricSparkSVG(m) + deltas +
+      '</div>';
+  }
+  document.getElementById("metrics").addEventListener("click", function (ev) {
+    var t = ev.target, el;
+    if ((el = t.closest("[data-mlog]"))) { openMetricLog(el.getAttribute("data-mlog")); return; }
+    if (t.closest("[data-mact]")) { metricsOpen = !metricsOpen; renderMetrics(); return; }
+  });
+
+  // --- Log sheet: stepper seeded to last value, date restricted to the editable window ---
+  function metricDefaultSeed(m) { return m.id === "weight" ? 150 : 0; }
+  function openMetricLog(id) {
+    var m = metrics[id]; if (!m) return;
+    var todayRec = (m.series || []).filter(function (r) { return r.date === todayKey; })[0];
+    var lat = metricLatest(m);
+    metricDraft = { id: id, value: todayRec ? todayRec.value : (lat ? lat.value : metricDefaultSeed(m)), date: todayKey };
+    renderMetricSheet();
+  }
+  function metricSyncInput() { var inp = document.querySelector("[data-mval]"); if (inp && metricDraft) { var v = parseFloat(inp.value); if (!isNaN(v)) metricDraft.value = v; } }
+  function metricStep(dir) {
+    if (!metricDraft) return;
+    metricSyncInput();
+    var m = metrics[metricDraft.id];
+    var v = (+metricDraft.value || 0) + dir * m.step;
+    metricDraft.value = Math.round(v / m.step) * m.step; // snap to the step grid
+    renderMetricSheet();
+  }
+  function metricPickDate(key) { if (metricDraft && dayEditable(key)) { metricDraft.date = key; renderMetricSheet(); } }
+  function metricSaveDraft() {
+    if (!metricDraft) return;
+    metricSyncInput();
+    var m = metrics[metricDraft.id]; if (!m) return closeMetricLog();
+    var v = parseFloat(metricDraft.value);
+    if (isNaN(v)) return;                       // nothing to save
+    if (!dayEditable(metricDraft.date)) return; // guard: current/previous day only
+    m.series = (m.series || []).filter(function (r) { return r.date !== metricDraft.date; });
+    m.series.push({ date: metricDraft.date, value: Math.round(v * 100) / 100 });
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+    var lbl = m.label;
+    metricDraft = null;
+    saveMetrics();
+    renderMetricSheet();
+    renderMetrics();
+    showToast("⚖️ " + lbl + " logged");
+  }
+  function closeMetricLog() { metricDraft = null; renderMetricSheet(); }
+  function renderMetricSheet() {
+    var modal = document.getElementById("metricModal");
+    if (!modal) return;
+    if (!metricDraft) { modal.className = "modal-backdrop"; modal.innerHTML = ""; document.body.style.overflow = ""; return; }
+    var m = metrics[metricDraft.id];
+    if (!m) { closeMetricLog(); return; }
+    var lat = metricLatest(m);
+    var prev = lat ? ("Last: " + fmtMetric(m, lat.value) + " " + escapeHtml(m.unit) + " · " + daysAgoLabel(lat.date)) : "First reading — sets your baseline";
+    var dateBtns = [{ k: todayKey, lbl: "Today" }, { k: yesterdayKey, lbl: "Yesterday" }].map(function (d) {
+      return '<button class="met-date' + (metricDraft.date === d.k ? " on" : "") + '" data-mdate="' + d.k + '">' + d.lbl + '</button>';
+    }).join("");
+    modal.className = "modal-backdrop open";
+    modal.innerHTML =
+      '<div class="modal" style="--dc:var(--health)">' +
+        '<div class="modal-head"><div>' +
+          '<div class="modal-title">Log ' + escapeHtml(m.label) + '</div>' +
+          '<div class="modal-sub">Objective reading — never scored</div>' +
+        '</div><button class="modal-close" data-mclose title="Close">×</button></div>' +
+        '<div class="met-stepper">' +
+          '<button class="met-step" data-mstep="-1" aria-label="Decrease">−</button>' +
+          '<div class="met-val-wrap">' +
+            '<input class="met-val-in" data-mval inputmode="decimal" value="' + fmtMetric(m, metricDraft.value) + '">' +
+            '<span class="met-val-unit">' + escapeHtml(m.unit) + '</span>' +
+          '</div>' +
+          '<button class="met-step" data-mstep="1" aria-label="Increase">+</button>' +
+        '</div>' +
+        '<div class="met-dates">' + dateBtns + '</div>' +
+        '<div class="met-prev">' + prev + '</div>' +
+        '<button class="met-save" data-msave>Save</button>' +
+      '</div>';
+    document.body.style.overflow = "hidden";
+    var inp = modal.querySelector("[data-mval]");
+    if (inp) {
+      inp.addEventListener("change", metricSyncInput);
+      inp.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); metricSaveDraft(); } });
+    }
+  }
+  document.getElementById("metricModal").addEventListener("click", function (ev) {
+    var t = ev.target, el;
+    if (t.id === "metricModal") { closeMetricLog(); return; } // backdrop
+    if (t.closest("[data-mclose]")) { closeMetricLog(); return; }
+    if ((el = t.closest("[data-mstep]"))) { metricStep(+el.getAttribute("data-mstep")); return; }
+    if ((el = t.closest("[data-mdate]"))) { metricPickDate(el.getAttribute("data-mdate")); return; }
+    if (t.closest("[data-msave]")) { metricSaveDraft(); return; }
+  });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && metricDraft) closeMetricLog(); });
+
   // ======================= Tips per dimension (editable, synced) =======================
   // A modal of "ideal state" bullets for each pillar, seeded from popular sources
   // and fully editable. The aim: follow these to maximize that area with the least
@@ -2553,6 +2846,7 @@
     if (!schedEditing) renderSchedule();
     if (!rewardsEditing) renderRewards();
     if (!goalInputFocused()) renderGoals();
+    if (!metricDraft) renderMetrics();
     if (!reviewInputFocused()) renderHistory();
     renderOverviewNow();
     renderOverviewPillars();
@@ -2992,6 +3286,7 @@
     onAuthIdentity(); // reload + reconcile per-dimension identity lines
     onAuthReviews();  // reload + reconcile weekly reviews
     onAuthGoals();    // reload + reconcile goals
+    onAuthMetrics();  // reload + reconcile health metrics
     onAuthTips();     // reload + reconcile per-dimension tips
     loadReminderPrefs();
     if (session) {
