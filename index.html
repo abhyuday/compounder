@@ -2063,9 +2063,7 @@
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && tipsOpenDom && tipEditing == null) closeTips(); });
 
   // ======================= YouTube summarizer (calls the local Python server) =======================
-  var YT_ENDPOINT_KEY = "compounder.ytEndpoint";
-  var YT_DEFAULT_ENDPOINT = "http://localhost:8009/summarize";
-  function ytEndpoint() { try { return localStorage.getItem(YT_ENDPOINT_KEY) || YT_DEFAULT_ENDPOINT; } catch (e) { return YT_DEFAULT_ENDPOINT; } }
+  var YT_FN_URL = SB_URL + "/functions/v1/summarize-video";
   function ytMdToHtml(md) {
     var lines = String(md || "").split(/\r?\n/), html = "", inList = false;
     function inline(s) { return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); }
@@ -2083,19 +2081,26 @@
     var urlEl = document.getElementById("ytUrl"), resEl = document.getElementById("ytResult"), goEl = document.getElementById("ytGo");
     if (!urlEl || !resEl) return;
     var url = (urlEl.value || "").trim();
-    var endpoint = ytEndpoint();
     if (!url) { resEl.innerHTML = '<div class="yt-err">Paste a YouTube URL first.</div>'; return; }
+    if (!session) { resEl.innerHTML = '<div class="yt-err">Sign in to Compounder first (the avatar, top-right) — summaries run on the server.</div>'; return; }
     resEl.innerHTML = '<div class="yt-loading"><span class="yt-spin"></span> Fetching transcript &amp; summarizing…</div>';
     if (goEl) goEl.disabled = true;
-    fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: url }) })
+    fetch(YT_FN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SB_ANON,
+        "Authorization": "Bearer " + session.access_token,
+      },
+      body: JSON.stringify({ url: url }),
+    })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
       .then(function (o) {
-        if (!o.ok) resEl.innerHTML = '<div class="yt-err">' + escapeHtml((o.j && o.j.detail) || "Something went wrong.") + "</div>";
+        if (!o.ok) resEl.innerHTML = '<div class="yt-err">' + escapeHtml((o.j && o.j.error) || "Something went wrong.") + "</div>";
         else resEl.innerHTML = '<div class="yt-summary">' + ytMdToHtml(o.j.summary) + "</div>";
       })
       .catch(function (e) {
-        resEl.innerHTML = '<div class="yt-err">Couldn’t reach the summarizer at <b>' + escapeHtml(endpoint) +
-          '</b>. Is the local server running?<div class="yt-hint2">' + escapeHtml(String((e && e.message) || e)) + "</div></div>";
+        resEl.innerHTML = '<div class="yt-err">Couldn’t reach the summarizer.<div class="yt-hint2">' + escapeHtml(String((e && e.message) || e)) + "</div></div>";
       })
       .finally(function () { if (goEl) goEl.disabled = false; });
   }
@@ -2113,10 +2118,6 @@
           '<button class="yt-go" id="ytGo">Transcribe</button>' +
         '</div>' +
         '<div class="yt-result" id="ytResult"></div>' +
-        '<details class="yt-settings"><summary>Server settings</summary>' +
-          '<input class="yt-endpoint" id="ytEndpoint" value="' + escapeHtml(ytEndpoint()) + '" spellcheck="false">' +
-          '<div class="yt-hint">Calls your local summarizer. Start it from the ticker-analyzer project:<br><code>uvicorn youtube_summarizer:app --port 8009</code> (needs ANTHROPIC_API_KEY in .env)</div>' +
-        '</details>' +
       '</div>';
     document.body.style.overflow = "hidden";
     var urlEl = document.getElementById("ytUrl");
@@ -2125,8 +2126,6 @@
       urlEl.focus();
     }
     document.getElementById("ytGo").addEventListener("click", ytSummarize);
-    var epEl = document.getElementById("ytEndpoint");
-    if (epEl) epEl.addEventListener("change", function () { try { localStorage.setItem(YT_ENDPOINT_KEY, (epEl.value || "").trim() || YT_DEFAULT_ENDPOINT); } catch (e) {} });
   }
   function closeYt() {
     var modal = document.getElementById("ytModal");
