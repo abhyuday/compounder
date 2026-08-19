@@ -1276,7 +1276,7 @@
   }
   function celebratePoint() {
     if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
-    var bal = balanceOn(todayKey);
+    var bal = walletBalance();
     var msg = "+1 point";
     if (bal > 0) {
       var affordable = rewardsCat.filter(function (r) { return (+r.cost || 0) <= bal; });
@@ -2227,7 +2227,7 @@
   function buyReward(idx) {
     var r = rewardsCat[idx]; if (!r) return;
     var cost = +r.cost || 0;
-    if (balanceOn(todayKey) < cost) return; // can't afford
+    if (walletBalance() < cost) return; // can't afford from the wallet
     var e = dayEntry(todayKey);
     e.rewards = (e.rewards || []).concat([{ label: r.label, cost: cost }]);
     e.updated_at = Date.now(); data[todayKey] = e; save(data); pushDay(todayKey);
@@ -2318,12 +2318,12 @@
     var host = document.getElementById("rewards");
     host.className = "sched" + (rewardsOpen ? " open" : "");
     var key = selectedKey, isToday = key === todayKey;
-    var earned = dayPoints(key), spent = spentOn(key), bal = earned - spent;
+    var earned = dayPoints(key), spent = spentOn(key);
+    var wallet = walletBalance(); // running, all-time balance you spend from
     var now = '<div class="sched-now" data-ract="toggle">' +
       '<span class="rew-emoji">🎁</span>' +
       '<span class="lbl">Rewards</span>' +
-      '<span class="rew-bal' + (isToday && bal > 0 ? " has" : "") + '">' +
-        (isToday ? (bal + ' to spend') : (spent > 0 ? ('−' + spent + ' spent') : 'none spent')) + '</span>' +
+      '<span class="rew-bal' + (wallet > 0 ? " has" : "") + '">' + wallet + ' saved</span>' +
       '<span class="chev">▾</span></div>';
     var body = "";
     if (rewardsOpen && rewardsEditing && isToday) {
@@ -2340,9 +2340,9 @@
           '<button class="lnk muted" data-ract="reset">Reset</button>' +
         '</div></div>';
     } else if (rewardsOpen) {
-      var dayName = isToday ? "Today" : dayLabel(key);
-      var tally = '<div class="rew-tally">' + escapeHtml(dayName) + ' · <b>' + earned + '</b> earned · <b>' + spent + '</b> spent' +
-        (isToday ? ' · <b class="' + (bal > 0 ? "pos" : "") + '">' + bal + '</b> to spend' : '') + '</div>';
+      var tally = isToday
+        ? '<div class="rew-tally"><b class="' + (wallet > 0 ? "pos" : "") + '">' + wallet + '</b> saved to spend · <b>' + earned + '</b> earned today</div>'
+        : '<div class="rew-tally">' + escapeHtml(dayLabel(key)) + ' · <b>' + earned + '</b> earned · <b>' + spent + '</b> spent</div>';
       var e = data[key];
       var logs = (e && e.rewards && e.rewards.length)
         ? '<div class="rew-logs">' + e.rewards.map(function (x, i) {
@@ -2351,7 +2351,7 @@
           }).join("") + '</div>'
         : (isToday ? "" : '<div class="rew-empty">No rewards bought this day.</div>');
       var items = isToday ? '<div class="rew-list">' + rewardsCat.map(function (r, i) {
-        var afford = bal >= (+r.cost || 0);
+        var afford = wallet >= (+r.cost || 0);
         return '<div class="rew-item">' +
           '<span class="rew-label">' + escapeHtml(r.label) + '</span>' +
           '<span class="rew-cost">' + (+r.cost || 0) + ' pt</span>' +
@@ -2876,12 +2876,15 @@
       (e.am_intent && e.am_intent.trim()) || (e.pm_review && e.pm_review.trim()) || e.hard || hasNotes(e) ||
       (e.rewards && e.rewards.length)));
   }
-  // Reward economy helpers (points are spent only on the day they're earned).
+  // Reward wallet: points accumulate across every day and are spent from the running
+  // balance (all-time earned minus all-time spent), so you can save up for bigger rewards.
   function spentOn(key) {
     var e = data[key]; if (!e || !e.rewards) return 0;
     return e.rewards.reduce(function (n, r) { return n + (+r.cost || 0); }, 0);
   }
-  function balanceOn(key) { return dayPoints(key) - spentOn(key); }
+  function walletEarned() { var t = 0; Object.keys(data).forEach(function (k) { t += dayPoints(k); }); return t; }
+  function walletSpent() { var t = 0; Object.keys(data).forEach(function (k) { t += spentOn(k); }); return t; }
+  function walletBalance() { return walletEarned() - walletSpent(); }
 
   function pushDay(day) {
     if (!sb || !session) return;
