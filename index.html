@@ -646,11 +646,14 @@
   .yt-keybox { margin-top: 14px; border-top: 1px solid var(--line-soft, var(--border)); padding-top: 10px; }
   .yt-keybox summary { font-size: 12.5px; color: var(--muted); cursor: pointer; list-style: none; }
   .yt-keybox summary::-webkit-details-marker { display: none; }
-  .yt-keyrow { display: flex; gap: 8px; margin-top: 9px; }
-  .yt-key { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: var(--mono, ui-monospace, monospace); outline: none; }
+  .yt-keyfield { margin-top: 11px; }
+  .yt-keylabel { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .yt-keyok { color: var(--done); font-weight: 600; }
+  .yt-key { width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: var(--mono, ui-monospace, monospace); outline: none; }
   .yt-key:focus { border-color: var(--dc, var(--accent)); }
-  .yt-keysave { flex: 0 0 auto; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .yt-keysave { margin-top: 12px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .yt-keysave:hover { border-color: #33404f; }
+  .yt-keysave:disabled { opacity: .6; cursor: default; }
 
   @media (display-mode: standalone) {
     /* A touch more breathing room when launched as an installed app */
@@ -2075,7 +2078,7 @@
 
   // ======================= YouTube summarizer (calls the local Python server) =======================
   var YT_FN_URL = SB_URL + "/functions/v1/summarize-video";
-  var ytKeySet = null; // whether the signed-in user has an Anthropic key saved (null = unknown)
+  var ytKeys = { aSet: null, aLast4: "", tSet: null, tLast4: "" }; // per-user Anthropic + TranscriptAPI key status
   function ytMdToHtml(md) {
     var lines = String(md || "").split(/\r?\n/), html = "", inList = false;
     function inline(s) { return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); }
@@ -2094,8 +2097,11 @@
     if (!urlEl || !resEl) return;
     var url = (urlEl.value || "").trim();
     if (!url) { resEl.innerHTML = '<div class="yt-err">Paste a YouTube URL first.</div>'; return; }
-    if (ytKeySet === false) { // known to have no key saved
-      resEl.innerHTML = '<div class="yt-err">Add your Anthropic API key first (below).</div>';
+    if (ytKeys.aSet === false || ytKeys.tSet === false) { // known to be missing a key
+      var miss = [];
+      if (ytKeys.tSet === false) miss.push("TranscriptAPI");
+      if (ytKeys.aSet === false) miss.push("Anthropic");
+      resEl.innerHTML = '<div class="yt-err">Add your ' + miss.join(" and ") + ' key' + (miss.length > 1 ? "s" : "") + ' first (below).</div>';
       var det = document.querySelector(".yt-keybox"); if (det) det.open = true;
       return;
     }
@@ -2115,51 +2121,63 @@
         if (o.ok) { resEl.innerHTML = '<div class="yt-summary">' + ytMdToHtml(o.j.summary) + "</div>"; return; }
         var msg = (o.j && o.j.error) || "Something went wrong.";
         resEl.innerHTML = '<div class="yt-err">' + escapeHtml(msg) + "</div>";
-        if (/Anthropic API key/i.test(msg)) { var d = document.querySelector(".yt-keybox"); if (d) d.open = true; }
+        if (/API key in the app/i.test(msg)) { var d = document.querySelector(".yt-keybox"); if (d) d.open = true; }
       })
       .catch(function (e) {
         resEl.innerHTML = '<div class="yt-err">Couldn’t reach the summarizer.<div class="yt-hint2">' + escapeHtml(String((e && e.message) || e)) + "</div></div>";
       })
       .finally(function () { if (goEl) goEl.disabled = false; });
   }
-  function ytKeySummaryLabel(last4) { return last4 ? ("🔑 Anthropic key saved (••••" + escapeHtml(last4) + ") — change") : "🔑 Set your Anthropic key"; }
-  function ytRenderKeyBox(last4, errMsg) {
+  function ytKeyBoxLabel() {
+    return "🔑 API keys — Transcript " + (ytKeys.tSet ? "✓" : "—") + " · Anthropic " + (ytKeys.aSet ? "✓" : "—");
+  }
+  function ytKeyFieldHtml(id, name, set, last4, ph) {
+    return '<div class="yt-keyfield"><label class="yt-keylabel">' + name +
+      (set ? ' <span class="yt-keyok">saved ••••' + escapeHtml(last4) + '</span>' : "") + '</label>' +
+      '<input class="yt-key" id="' + id + '" type="password" placeholder="' + (set ? "enter a new key to change" : ph) + '" autocomplete="off" spellcheck="false"></div>';
+  }
+  function ytRenderKeyBox(errMsg) {
     var box = document.getElementById("ytKeyBox"); if (!box) return;
-    var saved = !!last4;
+    var bothSet = ytKeys.aSet && ytKeys.tSet;
     box.innerHTML =
-      '<details class="yt-keybox"' + (saved ? "" : " open") + '>' +
-        '<summary id="ytKeySummary">' + ytKeySummaryLabel(last4) + '</summary>' +
-        '<div class="yt-keyrow">' +
-          '<input class="yt-key" id="ytKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">' +
-          '<button class="yt-keysave" id="ytKeySave">Save</button>' +
-        '</div>' +
+      '<details class="yt-keybox"' + (bothSet ? "" : " open") + '>' +
+        '<summary id="ytKeySummary">' + ytKeyBoxLabel() + '</summary>' +
+        ytKeyFieldHtml("ytKeyT", "TranscriptAPI key", ytKeys.tSet, ytKeys.tLast4, "transcriptapi.com key") +
+        ytKeyFieldHtml("ytKeyA", "Anthropic key", ytKeys.aSet, ytKeys.aLast4, "sk-ant-…") +
+        '<button class="yt-keysave" id="ytKeySave">Save keys</button>' +
         '<div class="yt-hint">' + (errMsg ? '<span style="color:#e57373">' + escapeHtml(errMsg) + '</span><br>' : "") +
-          'Saved to your synced account (readable only by you), so it works on every device — not stored on this device. Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. You pay for your own usage.</div>' +
+          'Both are saved to your synced account (readable only by you) and work on every device. Transcript key from <a href="https://transcriptapi.com" target="_blank" rel="noopener">transcriptapi.com</a> (free tier); Anthropic key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. You pay for your own usage.</div>' +
       '</details>';
     var saveEl = document.getElementById("ytKeySave");
-    if (saveEl) saveEl.addEventListener("click", ytSaveKey);
+    if (saveEl) saveEl.addEventListener("click", ytSaveKeys);
   }
-  function ytLoadKey() {
+  function ytLoadKeys() {
     var box = document.getElementById("ytKeyBox"); if (!box) return;
-    box.innerHTML = '<div class="yt-hint">Checking your key…</div>';
-    sb.from("user_settings").select("anthropic_key").eq("user_id", session.user.id).maybeSingle()
+    box.innerHTML = '<div class="yt-hint">Checking your keys…</div>';
+    sb.from("user_settings").select("anthropic_key, transcript_api_key").eq("user_id", session.user.id).maybeSingle()
       .then(function (res) {
-        if (res.error) { ytKeySet = null; ytRenderKeyBox("", res.error.message); return; }
-        var k = res.data && res.data.anthropic_key ? String(res.data.anthropic_key) : "";
-        ytKeySet = !!k;
-        ytRenderKeyBox(k ? k.slice(-4) : "", null);
-      }, function (e) { ytKeySet = null; ytRenderKeyBox("", String((e && e.message) || e)); });
+        if (res.error) { ytKeys = { aSet: null, aLast4: "", tSet: null, tLast4: "" }; ytRenderKeyBox(res.error.message); return; }
+        var a = res.data && res.data.anthropic_key ? String(res.data.anthropic_key) : "";
+        var t = res.data && res.data.transcript_api_key ? String(res.data.transcript_api_key) : "";
+        ytKeys = { aSet: !!a, aLast4: a.slice(-4), tSet: !!t, tLast4: t.slice(-4) };
+        ytRenderKeyBox(null);
+      }, function (e) { ytKeys = { aSet: null, aLast4: "", tSet: null, tLast4: "" }; ytRenderKeyBox(String((e && e.message) || e)); });
   }
-  function ytSaveKey() {
-    var inp = document.getElementById("ytKey"); if (!inp) return;
-    var k = (inp.value || "").trim();
+  function ytSaveKeys() {
+    var aEl = document.getElementById("ytKeyA"), tEl = document.getElementById("ytKeyT");
+    var a = ((aEl && aEl.value) || "").trim(), t = ((tEl && tEl.value) || "").trim();
+    if (!a && !t) { ytRenderKeyBox(null); return; }
+    var patch = { user_id: session.user.id };
+    if (a) patch.anthropic_key = a;
+    if (t) patch.transcript_api_key = t;
     var save = document.getElementById("ytKeySave"); if (save) { save.disabled = true; save.textContent = "Saving…"; }
-    sb.from("user_settings").upsert({ user_id: session.user.id, anthropic_key: k || null }, { onConflict: "user_id" })
+    sb.from("user_settings").upsert(patch, { onConflict: "user_id" })
       .then(function (res) {
-        if (res.error) { ytRenderKeyBox("", res.error.message); return; }
-        ytKeySet = !!k;
-        ytRenderKeyBox(k ? k.slice(-4) : "", null);
-      }, function (e) { ytRenderKeyBox("", String((e && e.message) || e)); });
+        if (res.error) { ytRenderKeyBox(res.error.message); return; }
+        if (a) { ytKeys.aSet = true; ytKeys.aLast4 = a.slice(-4); }
+        if (t) { ytKeys.tSet = true; ytKeys.tLast4 = t.slice(-4); }
+        ytRenderKeyBox(null);
+      }, function (e) { ytRenderKeyBox(String((e && e.message) || e)); });
   }
   function openYt() {
     var modal = document.getElementById("ytModal");
@@ -2191,7 +2209,7 @@
     }
     var goEl = document.getElementById("ytGo");
     if (goEl) goEl.addEventListener("click", ytSummarize);
-    if (session) { ytKeySet = null; ytLoadKey(); }
+    if (session) { ytKeys = { aSet: null, aLast4: "", tSet: null, tLast4: "" }; ytLoadKeys(); }
   }
   function closeYt() {
     var modal = document.getElementById("ytModal");
