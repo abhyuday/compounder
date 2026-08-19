@@ -640,6 +640,17 @@
   .yt-endpoint { width: 100%; margin-top: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 12.5px; font-family: var(--mono, ui-monospace, monospace); outline: none; }
   .yt-hint { font-size: 11.5px; color: var(--faint); margin-top: 7px; line-height: 1.5; }
   .yt-hint code { background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; font-size: 11px; }
+  .yt-hint a { color: var(--dc, var(--accent)); }
+  .yt-gate { font-size: 14px; color: var(--muted); line-height: 1.55; padding: 8px 2px 12px; }
+  .yt-gate b { color: var(--text); }
+  .yt-keybox { margin-top: 14px; border-top: 1px solid var(--line-soft, var(--border)); padding-top: 10px; }
+  .yt-keybox summary { font-size: 12.5px; color: var(--muted); cursor: pointer; list-style: none; }
+  .yt-keybox summary::-webkit-details-marker { display: none; }
+  .yt-keyrow { display: flex; gap: 8px; margin-top: 9px; }
+  .yt-key { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: var(--mono, ui-monospace, monospace); outline: none; }
+  .yt-key:focus { border-color: var(--dc, var(--accent)); }
+  .yt-keysave { flex: 0 0 auto; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .yt-keysave:hover { border-color: #33404f; }
 
   @media (display-mode: standalone) {
     /* A touch more breathing room when launched as an installed app */
@@ -2064,6 +2075,8 @@
 
   // ======================= YouTube summarizer (calls the local Python server) =======================
   var YT_FN_URL = SB_URL + "/functions/v1/summarize-video";
+  var YT_KEY_STORE = "compounder.anthropicKey";
+  function ytKey() { try { return localStorage.getItem(YT_KEY_STORE) || ""; } catch (e) { return ""; } }
   function ytMdToHtml(md) {
     var lines = String(md || "").split(/\r?\n/), html = "", inList = false;
     function inline(s) { return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); }
@@ -2081,8 +2094,13 @@
     var urlEl = document.getElementById("ytUrl"), resEl = document.getElementById("ytResult"), goEl = document.getElementById("ytGo");
     if (!urlEl || !resEl) return;
     var url = (urlEl.value || "").trim();
+    var key = ytKey();
     if (!url) { resEl.innerHTML = '<div class="yt-err">Paste a YouTube URL first.</div>'; return; }
-    if (!session) { resEl.innerHTML = '<div class="yt-err">Sign in to Compounder first (the avatar, top-right) — summaries run on the server.</div>'; return; }
+    if (!key) {
+      resEl.innerHTML = '<div class="yt-err">Add your Anthropic API key first (below).</div>';
+      var det = document.querySelector(".yt-keybox"); if (det) det.open = true;
+      return;
+    }
     resEl.innerHTML = '<div class="yt-loading"><span class="yt-spin"></span> Fetching transcript &amp; summarizing…</div>';
     if (goEl) goEl.disabled = true;
     fetch(YT_FN_URL, {
@@ -2091,6 +2109,7 @@
         "Content-Type": "application/json",
         "apikey": SB_ANON,
         "Authorization": "Bearer " + session.access_token,
+        "x-anthropic-key": key,
       },
       body: JSON.stringify({ url: url }),
     })
@@ -2104,28 +2123,52 @@
       })
       .finally(function () { if (goEl) goEl.disabled = false; });
   }
+  function ytKeyLabel(k) { return k ? ("🔑 Anthropic key saved (••••" + escapeHtml(k.slice(-4)) + ") — change") : "🔑 Set your Anthropic key"; }
   function openYt() {
     var modal = document.getElementById("ytModal");
     modal.className = "modal-backdrop open";
-    modal.innerHTML =
-      '<div class="modal" style="--dc:#e0704a">' +
-        '<div class="modal-head"><div>' +
-          '<div class="modal-title">Summarize a video</div>' +
-          '<div class="modal-sub">Paste a YouTube link — get the gist without watching</div>' +
-        '</div><button class="modal-close" data-ytclose title="Close">×</button></div>' +
+    var head =
+      '<div class="modal-head"><div>' +
+        '<div class="modal-title">Summarize a video</div>' +
+        '<div class="modal-sub">Paste a YouTube link — get the gist without watching</div>' +
+      '</div><button class="modal-close" data-ytclose title="Close">×</button></div>';
+    var body;
+    if (!session) {
+      // The whole feature is for signed-in users only.
+      body = '<div class="yt-gate">Sign in to Compounder first — tap the <b>Sign in</b> pill at the top. Summaries run on the server with <b>your own</b> Anthropic key, which you set here after signing in.</div>';
+    } else {
+      var key = ytKey();
+      body =
         '<div class="yt-form">' +
           '<input class="yt-url" id="ytUrl" type="url" inputmode="url" placeholder="https://youtube.com/watch?v=…" autocomplete="off">' +
           '<button class="yt-go" id="ytGo">Transcribe</button>' +
         '</div>' +
         '<div class="yt-result" id="ytResult"></div>' +
-      '</div>';
+        '<details class="yt-keybox"' + (key ? "" : " open") + '>' +
+          '<summary id="ytKeySummary">' + ytKeyLabel(key) + '</summary>' +
+          '<div class="yt-keyrow">' +
+            '<input class="yt-key" id="ytKey" type="password" placeholder="sk-ant-…" value="' + escapeHtml(key) + '" autocomplete="off" spellcheck="false">' +
+            '<button class="yt-keysave" id="ytKeySave">Save</button>' +
+          '</div>' +
+          '<div class="yt-hint">Stored only on this device and sent straight to Anthropic for your summaries — never saved on the server. Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. You pay for your own usage.</div>' +
+        '</details>';
+    }
+    modal.innerHTML = '<div class="modal" style="--dc:#e0704a">' + head + body + '</div>';
     document.body.style.overflow = "hidden";
     var urlEl = document.getElementById("ytUrl");
     if (urlEl) {
       urlEl.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); ytSummarize(); } });
       urlEl.focus();
     }
-    document.getElementById("ytGo").addEventListener("click", ytSummarize);
+    var goEl = document.getElementById("ytGo");
+    if (goEl) goEl.addEventListener("click", ytSummarize);
+    var saveEl = document.getElementById("ytKeySave");
+    if (saveEl) saveEl.addEventListener("click", function () {
+      var k = (document.getElementById("ytKey").value || "").trim();
+      try { if (k) localStorage.setItem(YT_KEY_STORE, k); else localStorage.removeItem(YT_KEY_STORE); } catch (e) {}
+      var det = document.querySelector(".yt-keybox");
+      if (det) { det.open = false; document.getElementById("ytKeySummary").textContent = ytKeyLabel(k); }
+    });
   }
   function closeYt() {
     var modal = document.getElementById("ytModal");

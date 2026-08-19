@@ -3,19 +3,18 @@
 // Fetches a YouTube transcript server-side (free, no Python) and summarizes it
 // with Claude, so the feature works from any device — not just a local laptop.
 //
-// Gated to signed-in users (the caller's Supabase session token is verified) so
-// the paid LLM endpoint isn't open to the world.
+// Bring-your-own-key: the feature is only for signed-in users, and each user sets
+// their OWN Anthropic key in the app. The key is sent per request (x-anthropic-key
+// header), used to call Anthropic, and never stored server-side. No shared key.
 //
-// Required secret (Edge Function → Secrets):
-//   ANTHROPIC_API_KEY   — your Anthropic key
-// Optional:
+// Optional secret:
 //   CLAUDE_MODEL        — defaults to a cheap, capable model
 // SUPABASE_URL and SUPABASE_ANON_KEY are injected automatically.
 //
 // Deploy (must be --no-verify-jwt so the browser's CORS preflight isn't rejected;
 // this function does its own auth via getUser() below):
 //   supabase functions deploy summarize-video --no-verify-jwt
-//   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+// (No ANTHROPIC_API_KEY secret needed — users bring their own.)
 //
 // NOTE ON TRANSCRIPTS: YouTube frequently bot-challenges datacenter IPs (which is
 // where Edge Functions run). If transcript fetching starts failing, swap
@@ -26,7 +25,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-anthropic-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const UA =
@@ -167,13 +166,14 @@ Deno.serve(async (req) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return json(401, { error: "Sign in to Compounder to use the summarizer." });
 
+  // Bring-your-own-key: the caller supplies their Anthropic key; we never store it.
+  const apiKey = (req.headers.get("x-anthropic-key") || "").trim();
+  if (!apiKey) return json(400, { error: "Add your Anthropic API key in the app to summarize." });
+
   let url = "";
   try { url = (await req.json()).url || ""; } catch { /* ignore */ }
   const videoId = extractVideoId(url);
   if (!videoId) return json(400, { error: "Couldn't find a YouTube video id in that URL." });
-
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey) return json(500, { error: "Server is missing ANTHROPIC_API_KEY." });
 
   let transcript = "";
   try {
