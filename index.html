@@ -293,7 +293,6 @@
   .cell.on { border: none; }
   .cell.on[data-d="money"]  { background: var(--money); }
   .cell.on[data-d="health"] { background: var(--health); }
-  .cell.on[data-d="family"] { background: var(--family); }
   .cell.on[data-d="self"]   { background: var(--self); }
   .cell.on[data-d="hard"]   { background: var(--comfort); }
   .cell.editable { cursor: pointer; }
@@ -307,6 +306,7 @@
   .hseg { width: 3px; height: 14px; border-radius: 2px; background: var(--panel-2); border: 1px solid var(--border); }
   .hcell[data-domain="health"] .hseg.on { background: var(--health); border-color: var(--health); }
   .hcell[data-domain="self"] .hseg.on { background: var(--self); border-color: var(--self); }
+  .hcell[data-domain="family"] .hseg.on { background: var(--family); border-color: var(--family); }
   .hcell.selectday:hover .hseg { border-color: #4a5a6b; }
 
   /* Sub-toggle cards (Health, Self) */
