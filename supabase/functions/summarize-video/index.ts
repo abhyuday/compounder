@@ -4,8 +4,9 @@
 // with Claude, so the feature works from any device — not just a local laptop.
 //
 // Bring-your-own-key: the feature is only for signed-in users, and each user sets
-// their OWN Anthropic key in the app. The key is sent per request (x-anthropic-key
-// header), used to call Anthropic, and never stored server-side. No shared key.
+// their OWN Anthropic key in the app. The key is saved to their (RLS-protected)
+// user_settings row so it syncs across every device; this function reads it back
+// with the caller's own credentials. No shared key, no per-device local storage.
 //
 // Optional secret:
 //   CLAUDE_MODEL        — defaults to a cheap, capable model
@@ -25,7 +26,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-anthropic-key",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const UA =
@@ -166,8 +167,10 @@ Deno.serve(async (req) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return json(401, { error: "Sign in to Compounder to use the summarizer." });
 
-  // Bring-your-own-key: the caller supplies their Anthropic key; we never store it.
-  const apiKey = (req.headers.get("x-anthropic-key") || "").trim();
+  // Bring-your-own-key: read the user's own key from their settings (RLS: own row).
+  const { data: settingsRow } = await supabase
+    .from("user_settings").select("anthropic_key").eq("user_id", user.id).maybeSingle();
+  const apiKey = (settingsRow?.anthropic_key || "").trim();
   if (!apiKey) return json(400, { error: "Add your Anthropic API key in the app to summarize." });
 
   let url = "";

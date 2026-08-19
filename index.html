@@ -2075,8 +2075,7 @@
 
   // ======================= YouTube summarizer (calls the local Python server) =======================
   var YT_FN_URL = SB_URL + "/functions/v1/summarize-video";
-  var YT_KEY_STORE = "compounder.anthropicKey";
-  function ytKey() { try { return localStorage.getItem(YT_KEY_STORE) || ""; } catch (e) { return ""; } }
+  var ytKeySet = null; // whether the signed-in user has an Anthropic key saved (null = unknown)
   function ytMdToHtml(md) {
     var lines = String(md || "").split(/\r?\n/), html = "", inList = false;
     function inline(s) { return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); }
@@ -2094,9 +2093,8 @@
     var urlEl = document.getElementById("ytUrl"), resEl = document.getElementById("ytResult"), goEl = document.getElementById("ytGo");
     if (!urlEl || !resEl) return;
     var url = (urlEl.value || "").trim();
-    var key = ytKey();
     if (!url) { resEl.innerHTML = '<div class="yt-err">Paste a YouTube URL first.</div>'; return; }
-    if (!key) {
+    if (ytKeySet === false) { // known to have no key saved
       resEl.innerHTML = '<div class="yt-err">Add your Anthropic API key first (below).</div>';
       var det = document.querySelector(".yt-keybox"); if (det) det.open = true;
       return;
@@ -2109,21 +2107,60 @@
         "Content-Type": "application/json",
         "apikey": SB_ANON,
         "Authorization": "Bearer " + session.access_token,
-        "x-anthropic-key": key,
       },
       body: JSON.stringify({ url: url }),
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
       .then(function (o) {
-        if (!o.ok) resEl.innerHTML = '<div class="yt-err">' + escapeHtml((o.j && o.j.error) || "Something went wrong.") + "</div>";
-        else resEl.innerHTML = '<div class="yt-summary">' + ytMdToHtml(o.j.summary) + "</div>";
+        if (o.ok) { resEl.innerHTML = '<div class="yt-summary">' + ytMdToHtml(o.j.summary) + "</div>"; return; }
+        var msg = (o.j && o.j.error) || "Something went wrong.";
+        resEl.innerHTML = '<div class="yt-err">' + escapeHtml(msg) + "</div>";
+        if (/Anthropic API key/i.test(msg)) { var d = document.querySelector(".yt-keybox"); if (d) d.open = true; }
       })
       .catch(function (e) {
         resEl.innerHTML = '<div class="yt-err">Couldn’t reach the summarizer.<div class="yt-hint2">' + escapeHtml(String((e && e.message) || e)) + "</div></div>";
       })
       .finally(function () { if (goEl) goEl.disabled = false; });
   }
-  function ytKeyLabel(k) { return k ? ("🔑 Anthropic key saved (••••" + escapeHtml(k.slice(-4)) + ") — change") : "🔑 Set your Anthropic key"; }
+  function ytKeySummaryLabel(last4) { return last4 ? ("🔑 Anthropic key saved (••••" + escapeHtml(last4) + ") — change") : "🔑 Set your Anthropic key"; }
+  function ytRenderKeyBox(last4, errMsg) {
+    var box = document.getElementById("ytKeyBox"); if (!box) return;
+    var saved = !!last4;
+    box.innerHTML =
+      '<details class="yt-keybox"' + (saved ? "" : " open") + '>' +
+        '<summary id="ytKeySummary">' + ytKeySummaryLabel(last4) + '</summary>' +
+        '<div class="yt-keyrow">' +
+          '<input class="yt-key" id="ytKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">' +
+          '<button class="yt-keysave" id="ytKeySave">Save</button>' +
+        '</div>' +
+        '<div class="yt-hint">' + (errMsg ? '<span style="color:#e57373">' + escapeHtml(errMsg) + '</span><br>' : "") +
+          'Saved to your synced account (readable only by you), so it works on every device — not stored on this device. Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. You pay for your own usage.</div>' +
+      '</details>';
+    var saveEl = document.getElementById("ytKeySave");
+    if (saveEl) saveEl.addEventListener("click", ytSaveKey);
+  }
+  function ytLoadKey() {
+    var box = document.getElementById("ytKeyBox"); if (!box) return;
+    box.innerHTML = '<div class="yt-hint">Checking your key…</div>';
+    sb.from("user_settings").select("anthropic_key").eq("user_id", session.user.id).maybeSingle()
+      .then(function (res) {
+        if (res.error) { ytKeySet = null; ytRenderKeyBox("", res.error.message); return; }
+        var k = res.data && res.data.anthropic_key ? String(res.data.anthropic_key) : "";
+        ytKeySet = !!k;
+        ytRenderKeyBox(k ? k.slice(-4) : "", null);
+      }, function (e) { ytKeySet = null; ytRenderKeyBox("", String((e && e.message) || e)); });
+  }
+  function ytSaveKey() {
+    var inp = document.getElementById("ytKey"); if (!inp) return;
+    var k = (inp.value || "").trim();
+    var save = document.getElementById("ytKeySave"); if (save) { save.disabled = true; save.textContent = "Saving…"; }
+    sb.from("user_settings").upsert({ user_id: session.user.id, anthropic_key: k || null }, { onConflict: "user_id" })
+      .then(function (res) {
+        if (res.error) { ytRenderKeyBox("", res.error.message); return; }
+        ytKeySet = !!k;
+        ytRenderKeyBox(k ? k.slice(-4) : "", null);
+      }, function (e) { ytRenderKeyBox("", String((e && e.message) || e)); });
+  }
   function openYt() {
     var modal = document.getElementById("ytModal");
     modal.className = "modal-backdrop open";
@@ -2137,21 +2174,13 @@
       // The whole feature is for signed-in users only.
       body = '<div class="yt-gate">Sign in to Compounder first — tap the <b>Sign in</b> pill at the top. Summaries run on the server with <b>your own</b> Anthropic key, which you set here after signing in.</div>';
     } else {
-      var key = ytKey();
       body =
         '<div class="yt-form">' +
           '<input class="yt-url" id="ytUrl" type="url" inputmode="url" placeholder="https://youtube.com/watch?v=…" autocomplete="off">' +
           '<button class="yt-go" id="ytGo">Transcribe</button>' +
         '</div>' +
         '<div class="yt-result" id="ytResult"></div>' +
-        '<details class="yt-keybox"' + (key ? "" : " open") + '>' +
-          '<summary id="ytKeySummary">' + ytKeyLabel(key) + '</summary>' +
-          '<div class="yt-keyrow">' +
-            '<input class="yt-key" id="ytKey" type="password" placeholder="sk-ant-…" value="' + escapeHtml(key) + '" autocomplete="off" spellcheck="false">' +
-            '<button class="yt-keysave" id="ytKeySave">Save</button>' +
-          '</div>' +
-          '<div class="yt-hint">Stored only on this device and sent straight to Anthropic for your summaries — never saved on the server. Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. You pay for your own usage.</div>' +
-        '</details>';
+        '<div id="ytKeyBox"></div>';
     }
     modal.innerHTML = '<div class="modal" style="--dc:#e0704a">' + head + body + '</div>';
     document.body.style.overflow = "hidden";
@@ -2162,13 +2191,7 @@
     }
     var goEl = document.getElementById("ytGo");
     if (goEl) goEl.addEventListener("click", ytSummarize);
-    var saveEl = document.getElementById("ytKeySave");
-    if (saveEl) saveEl.addEventListener("click", function () {
-      var k = (document.getElementById("ytKey").value || "").trim();
-      try { if (k) localStorage.setItem(YT_KEY_STORE, k); else localStorage.removeItem(YT_KEY_STORE); } catch (e) {}
-      var det = document.querySelector(".yt-keybox");
-      if (det) { det.open = false; document.getElementById("ytKeySummary").textContent = ytKeyLabel(k); }
-    });
+    if (session) { ytKeySet = null; ytLoadKey(); }
   }
   function closeYt() {
     var modal = document.getElementById("ytModal");
