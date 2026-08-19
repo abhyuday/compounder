@@ -609,6 +609,38 @@
   .tips-empty { font-size: 13px; color: var(--faint); padding: 10px 6px; }
   .tips-add { display: block; background: none; border: none; color: var(--dc, var(--accent)); font-size: 13.5px; font-weight: 600; cursor: pointer; padding: 8px 6px 4px; }
 
+  /* YouTube summarizer: header icon + modal */
+  .yt-btn { background: none; border: none; cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 4px; margin-left: 2px; opacity: .8; filter: grayscale(.2); }
+  .yt-btn:hover { opacity: 1; filter: none; }
+  .yt-form { display: flex; gap: 8px; padding: 4px 0 10px; }
+  .yt-url { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 11px; font-size: 14px; font-family: inherit; outline: none; }
+  .yt-url:focus { border-color: var(--dc, var(--accent)); }
+  .yt-go { flex: 0 0 auto; background: var(--dc, var(--accent)); color: #0e1116; border: none; border-radius: 9px; padding: 9px 16px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .yt-go:hover { filter: brightness(1.08); }
+  .yt-go:disabled { opacity: .55; cursor: default; }
+  .yt-result { min-height: 4px; }
+  .yt-loading { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13.5px; padding: 12px 2px; }
+  .yt-spin { width: 15px; height: 15px; border: 2px solid var(--border); border-top-color: var(--dc, var(--accent)); border-radius: 50%; animation: yt-rot .7s linear infinite; flex: 0 0 auto; }
+  @keyframes yt-rot { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .yt-spin { animation: none; } }
+  .yt-err { color: #e57373; font-size: 13.5px; line-height: 1.5; padding: 10px 2px; }
+  .yt-hint2 { color: var(--faint); font-size: 12px; }
+  .yt-summary { padding: 2px 0 4px; }
+  .yt-h { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--dc, var(--accent)); font-weight: 700; margin: 14px 0 6px; }
+  .yt-h:first-child { margin-top: 2px; }
+  .yt-p { font-size: 14px; color: var(--text); line-height: 1.55; margin: 6px 0; }
+  .yt-ul { margin: 4px 0 8px; padding-left: 2px; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .yt-ul li { position: relative; padding-left: 16px; font-size: 14px; color: var(--text); line-height: 1.5; }
+  .yt-ul li::before { content: "•"; position: absolute; left: 2px; color: var(--dc, var(--accent)); font-weight: 700; }
+  .yt-ul li b, .yt-p b { color: var(--text); font-weight: 700; }
+  .yt-settings { margin-top: 12px; border-top: 1px solid var(--line-soft, var(--border)); padding-top: 8px; }
+  .yt-settings summary { font-size: 12px; color: var(--muted); cursor: pointer; list-style: none; }
+  .yt-settings summary::-webkit-details-marker { display: none; }
+  .yt-settings summary::before { content: "⚙ "; }
+  .yt-endpoint { width: 100%; margin-top: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 12.5px; font-family: var(--mono, ui-monospace, monospace); outline: none; }
+  .yt-hint { font-size: 11.5px; color: var(--faint); margin-top: 7px; line-height: 1.5; }
+  .yt-hint code { background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; font-size: 11px; }
+
   @media (display-mode: standalone) {
     /* A touch more breathing room when launched as an installed app */
     body { padding-top: calc(14px + env(safe-area-inset-top)); }
@@ -619,7 +651,7 @@
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1><span class="dot"></span>Compounder</h1>
+      <h1><span class="dot"></span>Compounder<button class="yt-btn" id="ytBtn" title="Summarize a YouTube video" aria-label="Summarize a YouTube video">🎬</button></h1>
       <div class="brand-right">
         <span class="date" id="date"></span>
         <span class="pill" id="syncPill"><span>Sign in</span></span>
@@ -695,6 +727,7 @@
 </div>
 
 <div class="modal-backdrop" id="tipsModal"></div>
+<div class="modal-backdrop" id="ytModal"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -2028,6 +2061,83 @@
     if ((el = t.closest("[data-tipadd]"))) { tipAdd(el.getAttribute("data-tipadd")); return; }
   });
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && tipsOpenDom && tipEditing == null) closeTips(); });
+
+  // ======================= YouTube summarizer (calls the local Python server) =======================
+  var YT_ENDPOINT_KEY = "compounder.ytEndpoint";
+  var YT_DEFAULT_ENDPOINT = "http://localhost:8009/summarize";
+  function ytEndpoint() { try { return localStorage.getItem(YT_ENDPOINT_KEY) || YT_DEFAULT_ENDPOINT; } catch (e) { return YT_DEFAULT_ENDPOINT; } }
+  function ytMdToHtml(md) {
+    var lines = String(md || "").split(/\r?\n/), html = "", inList = false;
+    function inline(s) { return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); }
+    lines.forEach(function (ln) {
+      var t = ln.trim();
+      if (/^#{1,6}\s/.test(t)) { if (inList) { html += "</ul>"; inList = false; } html += '<div class="yt-h">' + inline(t.replace(/^#{1,6}\s/, "")) + "</div>"; }
+      else if (/^[-*]\s/.test(t)) { if (!inList) { html += '<ul class="yt-ul">'; inList = true; } html += "<li>" + inline(t.replace(/^[-*]\s+/, "")) + "</li>"; }
+      else if (t === "") { if (inList) { html += "</ul>"; inList = false; } }
+      else { if (inList) { html += "</ul>"; inList = false; } html += '<p class="yt-p">' + inline(t) + "</p>"; }
+    });
+    if (inList) html += "</ul>";
+    return html;
+  }
+  function ytSummarize() {
+    var urlEl = document.getElementById("ytUrl"), resEl = document.getElementById("ytResult"), goEl = document.getElementById("ytGo");
+    if (!urlEl || !resEl) return;
+    var url = (urlEl.value || "").trim();
+    var endpoint = ytEndpoint();
+    if (!url) { resEl.innerHTML = '<div class="yt-err">Paste a YouTube URL first.</div>'; return; }
+    resEl.innerHTML = '<div class="yt-loading"><span class="yt-spin"></span> Fetching transcript &amp; summarizing…</div>';
+    if (goEl) goEl.disabled = true;
+    fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: url }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+      .then(function (o) {
+        if (!o.ok) resEl.innerHTML = '<div class="yt-err">' + escapeHtml((o.j && o.j.detail) || "Something went wrong.") + "</div>";
+        else resEl.innerHTML = '<div class="yt-summary">' + ytMdToHtml(o.j.summary) + "</div>";
+      })
+      .catch(function (e) {
+        resEl.innerHTML = '<div class="yt-err">Couldn’t reach the summarizer at <b>' + escapeHtml(endpoint) +
+          '</b>. Is the local server running?<div class="yt-hint2">' + escapeHtml(String((e && e.message) || e)) + "</div></div>";
+      })
+      .finally(function () { if (goEl) goEl.disabled = false; });
+  }
+  function openYt() {
+    var modal = document.getElementById("ytModal");
+    modal.className = "modal-backdrop open";
+    modal.innerHTML =
+      '<div class="modal" style="--dc:#e0704a">' +
+        '<div class="modal-head"><div>' +
+          '<div class="modal-title">Summarize a video</div>' +
+          '<div class="modal-sub">Paste a YouTube link — get the gist without watching</div>' +
+        '</div><button class="modal-close" data-ytclose title="Close">×</button></div>' +
+        '<div class="yt-form">' +
+          '<input class="yt-url" id="ytUrl" type="url" inputmode="url" placeholder="https://youtube.com/watch?v=…" autocomplete="off">' +
+          '<button class="yt-go" id="ytGo">Transcribe</button>' +
+        '</div>' +
+        '<div class="yt-result" id="ytResult"></div>' +
+        '<details class="yt-settings"><summary>Server settings</summary>' +
+          '<input class="yt-endpoint" id="ytEndpoint" value="' + escapeHtml(ytEndpoint()) + '" spellcheck="false">' +
+          '<div class="yt-hint">Calls your local summarizer. Start it from the ticker-analyzer project:<br><code>uvicorn youtube_summarizer:app --port 8009</code> (needs ANTHROPIC_API_KEY in .env)</div>' +
+        '</details>' +
+      '</div>';
+    document.body.style.overflow = "hidden";
+    var urlEl = document.getElementById("ytUrl");
+    if (urlEl) {
+      urlEl.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); ytSummarize(); } });
+      urlEl.focus();
+    }
+    document.getElementById("ytGo").addEventListener("click", ytSummarize);
+    var epEl = document.getElementById("ytEndpoint");
+    if (epEl) epEl.addEventListener("change", function () { try { localStorage.setItem(YT_ENDPOINT_KEY, (epEl.value || "").trim() || YT_DEFAULT_ENDPOINT); } catch (e) {} });
+  }
+  function closeYt() {
+    var modal = document.getElementById("ytModal");
+    modal.className = "modal-backdrop"; modal.innerHTML = "";
+    document.body.style.overflow = "";
+  }
+  document.getElementById("ytBtn").addEventListener("click", openYt);
+  document.getElementById("ytModal").addEventListener("click", function (ev) {
+    if (ev.target.id === "ytModal" || ev.target.closest("[data-ytclose]")) closeYt();
+  });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && document.getElementById("ytModal").classList.contains("open")) closeYt(); });
 
   // ---- reward economy: spend today's earned points; nothing rolls over ----
   function buyReward(idx) {
