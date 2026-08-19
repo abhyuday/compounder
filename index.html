@@ -281,6 +281,16 @@
 
   /* Week grid */
   .grid-wrap { margin-top: 30px; }
+  .grid th.selday { cursor: pointer; }
+  .grid th.selday:hover { color: var(--text); }
+  /* Finalized (locked) day — read-only cards */
+  .day-locked { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--muted); line-height: 1.4; margin-bottom: 2px; }
+  .day-locked b { color: var(--text); }
+  .cards.locked .sub { cursor: default; }
+  .cards.locked .sub:hover { border-color: var(--border); }
+  .cards.locked .sub.on:hover { border-color: rgba(63,185,80,0.4); }
+  .cards.locked .note-add, .cards.locked .note-del, .cards.locked .note-bullet { display: none; }
+  .cards.locked .note-line { cursor: default; }
   .grid-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
   .navbtn { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 7px; padding: 3px 9px; font-size: 12px; cursor: pointer; }
   .navbtn:hover { color: var(--text); }
@@ -1045,6 +1055,14 @@
     var e = dayEntry(selectedKey);
     var recDom = (selectedKey === todayKey) ? recommendedDomain() : null; // "start here" pointer, today only
     cardsEl.innerHTML = "";
+    var locked = !dayEditable(selectedKey);
+    cardsEl.classList.toggle("locked", locked);
+    if (locked) {
+      var banner = document.createElement("div");
+      banner.className = "day-locked";
+      banner.innerHTML = "🔒 <b>Finalized.</b> Days are editable only for today and yesterday.";
+      cardsEl.appendChild(banner);
+    }
     DOMAINS.forEach(function (dom) {
       // Unified layout: every card is a header (domain + status) over a list of
       // check rows. A single-checkbox domain is just a one-row card.
@@ -1197,6 +1215,7 @@
     renderNotes();
   }
   function noteHandleClick(ev) {
+    if (!dayEditable(selectedKey)) return false; // finalized day — notes are read-only
     var t = ev.target;
     var add = t.closest && t.closest("[data-noteadd]");
     if (add) { ev.stopPropagation(); noteAdd(add.getAttribute("data-noteadd")); return true; }
@@ -1240,8 +1259,11 @@
 
   // Toggle one field on a given day. Handles simple domains and Health sub-flags.
   // Never allows a future day.
+  // A day's habits are editable only for the current and previous date; older days
+  // (and future) are finalized/locked.
+  function dayEditable(key) { return key === todayKey || key === yesterdayKey; }
   function setDomain(dayKey, key) {
-    if (dayKey > todayKey) return;
+    if (!dayEditable(dayKey)) return;
     var before = dayPoints(dayKey);
     var e = dayEntry(dayKey);
     e[key] = !e[key];
@@ -1420,7 +1442,9 @@
     for (var i = 0; i < 7; i++) {
       var d = addDays(viewMonday, i);
       var k = ymd(d);
-      html += "<th class='" + colClass(k).trim() + "'>" + DAYS[d.getDay()][0] + "<br>" + d.getDate() + "</th>";
+      var fut = d > today;
+      html += "<th class='" + colClass(k).trim() + (fut ? "" : " selday") + "'" + (fut ? "" : " data-day='" + k + "'") + ">" +
+        DAYS[d.getDay()][0] + "<br>" + d.getDate() + "</th>";
     }
     html += "</tr></thead><tbody>";
 
@@ -2562,14 +2586,12 @@
     selectDay(todayKey);
   });
 
-  // Direct back-fill: click any editable grid cell to toggle that day/domain.
-  // Health is three sub-parts, so its cell opens the day in the cards instead.
+  // Click any day (a cell or the day header) to jump to that date; editing then
+  // happens on the cards, which lock for finalized days.
   document.getElementById("grid").addEventListener("click", function (ev) {
     if (!ev.target.closest) return;
-    var cell = ev.target.closest(".cell.editable");
-    if (cell) { setDomain(cell.getAttribute("data-day"), cell.getAttribute("data-d")); return; }
-    var hcell = ev.target.closest(".hcell.selectday");
-    if (hcell) selectDay(hcell.getAttribute("data-day"));
+    var t = ev.target.closest("[data-day]");
+    if (t && !t.classList.contains("future")) selectDay(t.getAttribute("data-day"));
   });
 
   document.getElementById("prevWeek").addEventListener("click", function () {
