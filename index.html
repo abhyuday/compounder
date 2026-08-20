@@ -691,6 +691,13 @@
   .sc-tip-ic { flex: 0 0 auto; }
   .sc-legend { font-size: 11px; color: var(--faint); margin-top: 13px; line-height: 1.55; }
 
+  /* Drag-to-reorder (touch + mouse) */
+  .drag-handle { flex: 0 0 auto; cursor: grab; touch-action: none; color: var(--faint); font-size: 15px; line-height: 1; padding: 4px 6px; opacity: .65; user-select: none; -webkit-user-select: none; align-self: center; }
+  .drag-handle:hover { opacity: 1; }
+  .drag-handle:active { cursor: grabbing; }
+  .reorder-dragging { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 9px; background: var(--panel-2); opacity: .96; position: relative; z-index: 4; }
+  .reorder-indicator { position: absolute; left: 4px; right: 4px; height: 2px; background: var(--accent); border-radius: 2px; pointer-events: none; z-index: 6; box-shadow: 0 0 6px var(--accent); }
+
   /* YouTube summarizer: header icon + modal */
   .yt-btn { background: none; border: none; cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 4px; margin-left: 2px; opacity: .8; filter: grayscale(.2); }
   .yt-btn:hover { opacity: 1; filter: none; }
@@ -1929,7 +1936,7 @@
     saveGoals();
     renderGoals();
   }
-  function goalRowHtml(g, depth) {
+  function goalRowHtml(g, depth, parentId) {
     var hasKids = g.kids && g.kids.length;
     var done = goalDone(g);
     var collapsed = !!goalCollapsed[g.id];
@@ -1941,13 +1948,28 @@
       ? '<input class="goal-in" data-ginput="' + g.id + '" value="' + escapeHtml(g.title) + '" placeholder="What are you building toward?" maxlength="120">'
       : '<span class="goal-title' + (done ? " done" : "") + '" data-gedit="' + g.id + '">' + (g.title ? escapeHtml(g.title) : '<span class="goal-untitled">Untitled</span>') + '</span>';
     var meta = hasKids ? '<span class="goal-prog">' + goalLeafStats(g).done + "/" + goalLeafStats(g).total + '</span>' : "";
-    var row = '<div class="goal-row" style="padding-left:' + indent + 'px">' + lead + titleHtml + meta +
+    var row = '<div class="goal-row" style="padding-left:' + indent + 'px" data-gparent="' + (parentId || "root") + '">' +
+      '<span class="drag-handle" data-drag title="Drag to reorder">⠿</span>' + lead + titleHtml + meta +
       '<span class="goal-acts">' +
         '<button class="goal-act" data-gsub="' + g.id + '" title="Add sub-goal">+</button>' +
         '<button class="goal-act" data-gdel="' + g.id + '" title="Delete">×</button>' +
       '</span></div>';
-    var kidsHtml = (hasKids && !collapsed) ? g.kids.map(function (k) { return goalRowHtml(k, depth + 1); }).join("") : "";
+    var kidsHtml = (hasKids && !collapsed) ? g.kids.map(function (k) { return goalRowHtml(k, depth + 1, g.id); }).join("") : "";
     return row + kidsHtml;
+  }
+  // Reorder within a sibling group. "root" reorders the active (non-archived) top-level
+  // goals in place, leaving archived ones in their slots; otherwise reorder a parent's kids.
+  function reorderGoalGroup(group, from, to) {
+    if (group === "root") {
+      var slots = [], actives = [];
+      goals.forEach(function (g, i) { if (!g.archived) { slots.push(i); actives.push(g); } });
+      arrMove(actives, from, to);
+      slots.forEach(function (slotIdx, k) { goals[slotIdx] = actives[k]; });
+    } else {
+      var f = findGoal(group);
+      if (f && f.node.kids) arrMove(f.node.kids, from, to);
+    }
+    saveGoals(); renderGoals();
   }
   function renderGoals() {
     var host = document.getElementById("goals");
@@ -1962,7 +1984,7 @@
     var body = "";
     if (goalsOpen) {
       var list = active.length
-        ? active.map(function (g) { return goalRowHtml(g, 0); }).join("")
+        ? active.map(function (g) { return goalRowHtml(g, 0, "root"); }).join("")
         : '<div class="goal-empty">No goals yet. What are you building toward?</div>';
       var arch = "";
       if (archived.length) {
@@ -1978,6 +2000,13 @@
       body = '<div class="sched-body goal-body">' + list + '<button class="goal-add" data-gadd>+ Goal</button>' + arch + '</div>';
     }
     host.innerHTML = now + body;
+    if (goalsOpen && !goalEditing) {
+      enableReorder(host.querySelector(".goal-body"), {
+        itemSelector: ".goal-row[data-gparent]", handleSelector: "[data-drag]",
+        groupOf: function (el) { return el.getAttribute("data-gparent"); },
+        onReorder: function (from, to, group) { reorderGoalGroup(group, from, to); }
+      });
+    }
     if (goalsOpen && goalEditing) {
       var gin = host.querySelector('[data-ginput]');
       if (gin) {
@@ -2250,6 +2279,59 @@
     if (t.closest("[data-msave]")) { metricSaveDraft(); return; }
   });
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && metricDraft) closeMetricLog(); });
+
+  // ======================= Drag-to-reorder engine (pointer-based; touch + mouse) =======================
+  // Grab a row's grip handle and drag: a line shows where it will land, release to drop.
+  // Reorders the data model (not the live DOM), so it works with the app's re-render-on-
+  // change pattern. Supports sibling "groups" (via groupOf) so nested lists like Goals only
+  // reorder within one parent's children. Re-attach after each render; old nodes are GC'd.
+  function arrMove(arr, from, to) { if (from === to) return arr; var x = arr.splice(from, 1)[0]; arr.splice(to, 0, x); return arr; }
+  function enableReorder(container, cfg) {
+    if (!container) return;
+    function items() { return Array.prototype.slice.call(container.querySelectorAll(cfg.itemSelector)); }
+    function keyOf(el) { return cfg.groupOf ? cfg.groupOf(el) : "_"; }
+    container.addEventListener("pointerdown", function (e) {
+      var handle = e.target.closest && e.target.closest(cfg.handleSelector);
+      if (!handle || !container.contains(handle)) return;
+      var dragged = handle.closest(cfg.itemSelector);
+      if (!dragged) return;
+      e.preventDefault();
+      var group = keyOf(dragged);
+      var siblings = items().filter(function (it) { return keyOf(it) === group; });
+      var fromIdx = siblings.indexOf(dragged);
+      var prevPos = container.style.position; container.style.position = "relative";
+      var indicator = document.createElement("div"); indicator.className = "reorder-indicator"; container.appendChild(indicator);
+      dragged.classList.add("reorder-dragging");
+      var toIdx = fromIdx;
+      function others() { return siblings.filter(function (s) { return s !== dragged; }); }
+      function place(y) {
+        var os = others(), idx = 0;
+        for (var i = 0; i < os.length; i++) { var r = os[i].getBoundingClientRect(); if (y > r.top + r.height / 2) idx++; }
+        toIdx = idx;
+        var crect = container.getBoundingClientRect(), top;
+        if (!os.length) top = 0;
+        else if (idx >= os.length) { var rb = os[os.length - 1].getBoundingClientRect(); top = rb.bottom - crect.top; }
+        else { var rt = os[idx].getBoundingClientRect(); top = rt.top - crect.top; }
+        indicator.style.top = (top - 1) + "px";
+      }
+      function move(ev) { ev.preventDefault(); place(ev.clientY); }
+      function end(ev) {
+        try { handle.releasePointerCapture(ev.pointerId); } catch (_) {}
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", end);
+        handle.removeEventListener("pointercancel", end);
+        if (indicator.parentNode) indicator.parentNode.removeChild(indicator);
+        dragged.classList.remove("reorder-dragging");
+        container.style.position = prevPos;
+        if (toIdx !== fromIdx) cfg.onReorder(fromIdx, toIdx, group);
+      }
+      try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", end);
+      handle.addEventListener("pointercancel", end);
+      place(e.clientY);
+    });
+  }
 
   // ======================= Compounder Score (composite 0–100; derived, not scored-into) =======================
   // A rolling health-of-system score over a trailing 4-week window, blending four
@@ -2592,7 +2674,8 @@
         return '<div class="tip-item"><span class="tip-dot" style="color:' + color + '">•</span>' +
           '<textarea class="tip-in" data-tipinput="' + id + '" rows="1">' + escapeHtml(t) + '</textarea></div>';
       }
-      return '<div class="tip-item"><span class="tip-dot" style="color:' + color + '">•</span>' +
+      return '<div class="tip-item"><span class="drag-handle" data-drag title="Drag to reorder">⠿</span>' +
+        '<span class="tip-dot" style="color:' + color + '">•</span>' +
         '<span class="tip-text" data-tipedit="' + id + '">' + escapeHtml(t) + '</span>' +
         '<button class="tip-del" data-tipdel="' + id + '" title="Remove">×</button></div>';
     }).join("");
@@ -2622,6 +2705,12 @@
         tipCommit(id, ta.value);
       });
       ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+    if (tipEditing == null) {
+      enableReorder(modal.querySelector(".tips-list"), {
+        itemSelector: ".tip-item", handleSelector: "[data-drag]",
+        onReorder: function (from, to) { arrMove(mutableTips(tipsOpenDom), from, to); saveTips(); renderTips(); }
+      });
     }
   }
   document.getElementById("tipsModal").addEventListener("click", function (ev) {
@@ -2886,6 +2975,7 @@
     if (rewardsOpen && rewardsEditing && isToday) {
       body = '<div class="sched-body">' + rewardsCat.map(function (r, i) {
         return '<div class="blk edit" data-ridx="' + i + '">' +
+          '<span class="drag-handle" data-drag title="Drag to reorder">⠿</span>' +
           '<input class="rlabel-in" value="' + escapeHtml(r.label) + '" placeholder="Reward">' +
           '<input class="rcost-in" type="number" min="1" value="' + (+r.cost || 1) + '">' +
           '<span class="rew-pt">pt</span>' +
@@ -2919,6 +3009,12 @@
       body = '<div class="sched-body">' + tally + logs + items + actions + '</div>';
     }
     host.innerHTML = now + body;
+    if (rewardsOpen && rewardsEditing && isToday) {
+      enableReorder(host.querySelector(".sched-body"), {
+        itemSelector: ".blk.edit", handleSelector: "[data-drag]",
+        onReorder: function (from, to) { var arr = readRewardEdits(); arrMove(arr, from, to); rewardsCat = arr; saveRewardsCat(arr); renderRewards(); }
+      });
+    }
   }
   function readRewardEdits() {
     var rows = document.querySelectorAll("#rewards .blk.edit");
