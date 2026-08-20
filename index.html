@@ -2984,7 +2984,6 @@
         '<div class="sched-actions">' +
           '<button class="lnk" data-ract="add">+ Add reward</button>' +
           '<button class="lnk" data-ract="save">Save</button>' +
-          '<button class="lnk muted" data-ract="reset">Reset</button>' +
         '</div></div>';
     } else if (rewardsOpen) {
       var tally = isToday
@@ -3037,7 +3036,6 @@
     if (a === "edit")  { rewardsEditing = true; rewardsOpen = true; renderRewards(); return; }
     if (a === "add")   { rewardsCat = readRewardEdits(); rewardsCat.push({ label: "New reward", cost: 1 }); renderRewards(); return; }
     if (a === "del")   { var row = act.closest(".blk"); var i = +row.getAttribute("data-ridx"); var arr = readRewardEdits(); arr.splice(i, 1); rewardsCat = arr; renderRewards(); return; }
-    if (a === "reset") { rewardsCat = loadDefaultRewards(); saveRewardsCat(rewardsCat); rewardsEditing = false; renderRewards(); return; }
     if (a === "save")  { rewardsCat = readRewardEdits(); saveRewardsCat(rewardsCat); rewardsEditing = false; renderRewards(); return; }
   });
 
