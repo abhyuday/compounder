@@ -13,7 +13,7 @@ Each dimension is worth **1 point/day** → max 5/day, 35/week, **target 25**.
 | **Comfort Zone — Push** | One hard thing you'd rather avoid — the dreaded workout, the awkward call, the cold outreach. Leave the comfort zone. |
 | **Money — Creative** | One 15-minute move that compounds — fund the account, write a page of the thesis, one real outreach, one position reconciled. Watching the market doesn't count. |
 | **Health** | 2 of 3: **Move** (zone 2 / lift / 8K steps), **Eat** (protein first, nothing you'd hide), **Sleep** (screens down, lights-out by target). Win on a bad day. |
-| **Family** | **Both** required: **Presence** (one undistracted block with one specific person, phone in another room) **and** **Conflict** (faced the friction instead of dodging it — a hard talk, a repair, an honest apology). |
+| **Family and Circle** | **Both** required: **Presence** (one undistracted block with one specific person, phone in another room) **and** **Conflict** (faced the friction instead of dodging it — a hard talk, a repair, an honest apology). |
 | **Self** | 2 of 4: **Resolve and Focus** (did what you resolved), **Sincerity** (honest, clean-tongued), **Soft Skills** (public speaking, music, dance, improv, networking), **Restoration** (30 min of chosen nothing — not the feed). |
 
 Health, Family, and Self are split into sub-toggles that each track a pillar but contribute a single dimension point (Health/Self at 2-of-N, Family needing both) — so the daily max stays 5 and the mental model stays simple. Legacy days logged before Family's Conflict box existed keep their point on Presence alone, so history and streaks are never rewritten.
