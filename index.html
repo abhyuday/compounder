@@ -84,6 +84,16 @@
   .track .goal { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
   .week-foot { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 18px; }
   .week-foot b { color: var(--text); }
+  .week-rew { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--border); }
+  .week-rew-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 9px; font-size: 12px; }
+  .week-rew-label { text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); flex: 0 0 auto; }
+  .week-rew-label .emo { text-transform: none; }
+  .week-rew-num { font-variant-numeric: tabular-nums; color: var(--faint); text-align: right; }
+  .week-rew-num b { color: var(--text); font-weight: 700; }
+  .track.mini { height: 7px; border-radius: 5px; }
+  .track .fill.rew { background: linear-gradient(90deg, #b9781f, var(--accent)); }
+  .week-rew-foot { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .week-rew-foot b { color: var(--text); }
   .week-streak { color: var(--accent); font-weight: 600; text-transform: none; letter-spacing: 0; }
 
   /* Focus "start here" marker + celebration toast */
@@ -796,6 +806,7 @@
           <div class="goal" id="weekGoal"></div>
         </div>
         <div class="week-foot" id="weekFoot"></div>
+        <div class="week-rew" id="weekRew"></div>
       </section>
     </div>
   </section>
@@ -1457,6 +1468,25 @@
     }
     var tgSum = document.getElementById("toolgroupSum"); // glanceable week progress on the collapsed Overview bar
     if (tgSum) tgSum.textContent = pts + " / " + TARGET + " this week";
+
+    // Rewards tracker: points spent this week against the wallet available to spend.
+    var weekRew = document.getElementById("weekRew");
+    if (weekRew) {
+      var avail = walletBalance();
+      var spentWk = 0;
+      for (var i = 0; i < 7; i++) spentWk += spentOn(ymd(addDays(thisMonday, i)));
+      var pool = avail + spentWk; // what was available to draw on for this week's spending
+      var spentPct = pool > 0 ? Math.min(100, (spentWk / pool) * 100) : 0;
+      weekRew.innerHTML =
+        '<div class="week-rew-top">' +
+          '<span class="week-rew-label"><span class="emo">🎁</span> Rewards</span>' +
+          '<span class="week-rew-num"><b>' + spentWk + '</b> spent this wk · <b>' + avail + '</b> available</span>' +
+        '</div>' +
+        '<div class="track mini"><div class="fill rew" style="width:' + spentPct + '%"></div></div>' +
+        (pool > 0
+          ? '<div class="week-rew-foot">Drew down <b>' + Math.round(spentPct) + '%</b> of your available rewards this week.</div>'
+          : '<div class="week-rew-foot">Earn points, then spend them in Rewards — nothing saved yet.</div>');
+    }
   }
 
   // ---- Overview group: one collapsible wrapper; remembers its state, collapsed by default ----
