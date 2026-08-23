@@ -1597,12 +1597,11 @@
   function renderOverviewTabs() {
     var host = document.getElementById("ovBar");
     if (!host) return;
-    var cur = schedule[currentBlockIndex()] || null;
     var pm = (typeof metricPrimary === "function") ? metricPrimary() : null;
     var mLast = pm ? metricLatest(pm) : null;
     var activeGoals = goals.filter(function (g) { return !g.archived; }).length;
     var tabs = [
-      { key: "sched",   ic: "🗓️", tl: "Schedule", bd: cur ? cur.label : "" },
+      { key: "sched",   ic: "🗓️", tl: "Schedule", bd: "" }, // current block already shown on the Now line
       { key: "rewards", ic: "🎁", tl: "Rewards",  bd: walletBalance() + " saved" },
       { key: "goals",   ic: "🎯", tl: "Goals",    bd: activeGoals ? (activeGoals + " active") : "none" },
       { key: "metrics", ic: "⚖️", tl: "Metrics",  bd: mLast ? (fmtMetric(pm, mLast.value) + " " + pm.unit) : "—" }
