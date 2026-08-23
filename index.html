@@ -94,6 +94,24 @@
   .track .fill.rew { background: linear-gradient(90deg, #b9781f, var(--accent)); }
   .week-rew-foot { margin-top: 8px; font-size: 12px; color: var(--muted); }
   .week-rew-foot b { color: var(--text); }
+
+  /* Overview tabs: one row of tabs in place of stacked panel headers */
+  .ov-tabs { display: flex; gap: 7px; margin-bottom: 14px; }
+  .ov-tab { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 9px 4px 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 11px;
+    cursor: pointer; color: var(--muted); font-family: inherit; transition: border-color .15s ease, background .15s ease; }
+  .ov-tab:hover { border-color: #33404f; }
+  .ov-tab.on { border-color: var(--accent); background: var(--panel-2); color: var(--text); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .ov-tab .ov-ic { font-size: 17px; line-height: 1; }
+  .ov-tab .ov-tl { font-size: 11px; font-weight: 600; letter-spacing: .01em; }
+  .ov-tab .ov-bd { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-tab.on .ov-bd { color: var(--accent); }
+  @media (max-width: 380px) { .ov-tab .ov-tl { display: none; } }
+  /* Panels become single tab-content cards: hide their own headers, show only the active one */
+  .ovpanel { margin-bottom: 0; }
+  .ovpanel.hidden { display: none; }
+  .ovpanel.open { margin-bottom: 18px; }
+  .ovpanel > .sched-now { display: none; }
   .week-streak { color: var(--accent); font-weight: 600; text-transform: none; letter-spacing: 0; }
 
   /* Focus "start here" marker + celebration toast */
@@ -788,6 +806,7 @@
       <span class="chev">▾</span>
     </button>
     <div class="toolgroup-body">
+      <div class="ov-tabs" id="ovTabs"></div>
       <section class="sched" id="sched"></section>
 
       <section class="sched" id="rewards"></section>
@@ -1506,6 +1525,52 @@
   });
   renderToolgroup();
 
+  // ---- Overview tabs: Schedule / Rewards / Goals / Metrics as one tab row ----
+  // Replaces the four stacked panel headers. One tab is open at a time (tap again to
+  // close); each panel now renders only its body (its own .sched-now header is hidden),
+  // so the cluster is a single tab strip plus the active section. Persisted; badges keep
+  // the glanceable summary that used to live in each panel header.
+  var overviewTab = null;
+  try { var _ot = localStorage.getItem("compounder.ovTab"); if (_ot) overviewTab = _ot; } catch (e) {}
+  function syncOverviewOpen() {
+    schedOpen = overviewTab === "sched";
+    rewardsOpen = overviewTab === "rewards";
+    goalsOpen = overviewTab === "goals";
+    metricsOpen = overviewTab === "metrics";
+  }
+  function setOverviewTab(name) {
+    overviewTab = (overviewTab === name) ? null : name;
+    try { if (overviewTab) localStorage.setItem("compounder.ovTab", overviewTab); else localStorage.removeItem("compounder.ovTab"); } catch (e) {}
+    if (overviewTab !== "sched") schedEditing = false;
+    if (overviewTab !== "rewards") rewardsEditing = false;
+    syncOverviewOpen();
+    renderSchedule(); renderRewards(); renderGoals(); renderMetrics(); renderOverviewTabs();
+  }
+  function renderOverviewTabs() {
+    var host = document.getElementById("ovTabs");
+    if (!host) return;
+    var cur = schedule[currentBlockIndex()] || null;
+    var pm = (typeof metricPrimary === "function") ? metricPrimary() : null;
+    var mLast = pm ? metricLatest(pm) : null;
+    var activeGoals = goals.filter(function (g) { return !g.archived; }).length;
+    var tabs = [
+      { key: "sched",   ic: "🗓️", tl: "Schedule", bd: cur ? cur.label : "" },
+      { key: "rewards", ic: "🎁", tl: "Rewards",  bd: walletBalance() + " saved" },
+      { key: "goals",   ic: "🎯", tl: "Goals",    bd: activeGoals ? (activeGoals + " active") : "none" },
+      { key: "metrics", ic: "⚖️", tl: "Metrics",  bd: mLast ? (fmtMetric(pm, mLast.value) + " " + pm.unit) : "—" }
+    ];
+    host.innerHTML = tabs.map(function (t) {
+      return '<button class="ov-tab' + (overviewTab === t.key ? " on" : "") + '" data-ovtab="' + t.key + '">' +
+        '<span class="ov-ic">' + t.ic + '</span>' +
+        '<span class="ov-tl">' + t.tl + '</span>' +
+        '<span class="ov-bd">' + escapeHtml(t.bd || "") + '</span></button>';
+    }).join("");
+  }
+  document.getElementById("ovTabs").addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-ovtab]");
+    if (b) setOverviewTab(b.getAttribute("data-ovtab"));
+  });
+
   // The current time block + what to do now, shown on the collapsed Overview tile.
   // Reads the schedule data but is rendered independently of the Schedule component.
   function renderOverviewNow() {
@@ -2004,7 +2069,7 @@
   function renderGoals() {
     var host = document.getElementById("goals");
     if (!host) return;
-    host.className = "sched" + (goalsOpen ? " open" : "");
+    host.className = "sched ovpanel" + (goalsOpen ? " open" : " hidden");
     var active = goals.filter(function (g) { return !g.archived; });
     var archived = goals.filter(function (g) { return g.archived; });
     var summary = active.length ? (active.length + " active") : (archived.length ? "all achieved 🎉" : "none yet");
@@ -2178,7 +2243,7 @@
   function renderMetrics() {
     var host = document.getElementById("metrics");
     if (!host) return;
-    host.className = "sched" + (metricsOpen ? " open" : "");
+    host.className = "sched ovpanel" + (metricsOpen ? " open" : " hidden");
     var pm = metricPrimary();
     var lat = pm ? metricLatest(pm) : null;
     var stale = pm ? metricStaleDays(pm) : null;
@@ -2942,7 +3007,7 @@
   }
   function renderSchedule() {
     var host = document.getElementById("sched");
-    host.className = "sched" + (schedOpen ? " open" : "");
+    host.className = "sched ovpanel" + (schedOpen ? " open" : " hidden");
     var idx = currentBlockIndex();
     var cur = schedule[idx] || { label: "—", start: "", note: "" };
     var next = schedule.length ? schedule[(idx + 1) % schedule.length] : null;
@@ -2992,7 +3057,7 @@
   // purchase log read-only, so buys are never "lost" — just historical.
   function renderRewards() {
     var host = document.getElementById("rewards");
-    host.className = "sched" + (rewardsOpen ? " open" : "");
+    host.className = "sched ovpanel" + (rewardsOpen ? " open" : " hidden");
     var key = selectedKey, isToday = key === todayKey;
     var earned = dayPoints(key), spent = spentOn(key);
     var wallet = walletBalance(); // running, all-time balance you spend from
@@ -3202,6 +3267,7 @@
   });
 
   function renderAll() {
+    syncOverviewOpen(); // keep panel open-state in sync with the active Overview tab
     renderScore();
     renderDaySwitch();
     if (!anyEditorFocused()) renderCards(); // don't steal focus while a note/why is being typed
@@ -3212,6 +3278,7 @@
     if (!rewardsEditing) renderRewards();
     if (!goalInputFocused()) renderGoals();
     if (!metricDraft) renderMetrics();
+    renderOverviewTabs();
     if (!reviewInputFocused()) renderHistory();
     renderOverviewNow();
     renderOverviewPillars();
