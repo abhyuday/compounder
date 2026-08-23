@@ -45,7 +45,7 @@
     padding:
       calc(24px + env(safe-area-inset-top))
       calc(16px + env(safe-area-inset-right))
-      calc(44px + env(safe-area-inset-bottom))
+      calc(96px + env(safe-area-inset-bottom))
       calc(16px + env(safe-area-inset-left));
   }
   /* Snappier taps on interactive elements */
@@ -95,22 +95,49 @@
   .week-rew-foot { margin-top: 8px; font-size: 12px; color: var(--muted); }
   .week-rew-foot b { color: var(--text); }
 
-  /* Overview tabs: one row of tabs in place of stacked panel headers */
-  .ov-tabs { display: flex; gap: 7px; margin-bottom: 14px; }
-  .ov-tab { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
-    padding: 9px 4px 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 11px;
-    cursor: pointer; color: var(--muted); font-family: inherit; transition: border-color .15s ease, background .15s ease; }
-  .ov-tab:hover { border-color: #33404f; }
-  .ov-tab.on { border-color: var(--accent); background: var(--panel-2); color: var(--text); box-shadow: 0 0 0 1px var(--accent) inset; }
-  .ov-tab .ov-ic { font-size: 17px; line-height: 1; }
-  .ov-tab .ov-tl { font-size: 11px; font-weight: 600; letter-spacing: .01em; }
-  .ov-tab .ov-bd { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ov-tab.on .ov-bd { color: var(--accent); }
-  @media (max-width: 380px) { .ov-tab .ov-tl { display: none; } }
-  /* Panels become single tab-content cards: hide their own headers, show only the active one */
+  /* Persistent "Now" line — the current schedule block, always visible; tap to open Schedule */
+  .nowline { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 11px 14px; margin-bottom: 18px; cursor: pointer; box-shadow: var(--shadow); }
+  .nowline:hover { border-color: #33404f; }
+  .nowline.focus { border-color: rgba(217,164,65,0.55); }
+  .nowline .nl-time { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 700; flex: 0 0 auto; }
+  .nowline .nl-label { font-size: 14px; font-weight: 600; color: var(--text); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nowline .nl-todo { font-size: 12px; color: var(--accent); flex: 0 0 auto; }
+  .nowline .nl-open { margin-left: auto; font-size: 12px; color: var(--faint); flex: 0 0 auto; }
+  .nowline:empty { display: none; }
+
+  /* Sticky bottom bar: Schedule / Rewards / Goals / Metrics */
+  .ov-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 250; display: flex; gap: 2px;
+    background: var(--panel); border-top: 1px solid var(--border);
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); box-shadow: 0 -6px 22px rgba(0,0,0,0.4); }
+  .ov-tab { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 7px 3px; background: none; border: none; border-radius: 11px; cursor: pointer; color: var(--muted);
+    font-family: inherit; transition: background .15s ease, color .15s ease; }
+  .ov-tab:hover { color: var(--text); }
+  .ov-tab.on { background: var(--panel-2); color: var(--accent); }
+  .ov-tab .ov-ic { font-size: 18px; line-height: 1; }
+  .ov-tab .ov-tl { font-size: 10.5px; font-weight: 600; letter-spacing: .01em; }
+  .ov-tab .ov-bd { font-size: 10px; color: var(--faint); font-variant-numeric: tabular-nums; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-tab.on .ov-bd { color: var(--accent); opacity: .85; }
+
+  /* Bottom sheet the active tab opens into */
+  .ov-sheet-backdrop { position: fixed; inset: 0; z-index: 240; display: none;
+    background: rgba(6,9,13,0.55); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+  .ov-sheet-backdrop.open { display: block; }
+  .ov-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 245; max-height: 78vh; overflow-y: auto;
+    background: var(--bg); border-top: 1px solid var(--border); border-radius: 18px 18px 0 0;
+    box-shadow: 0 -14px 44px rgba(0,0,0,0.55);
+    padding: 6px 14px calc(78px + env(safe-area-inset-bottom)); }
+  @media (min-width: 560px) { .ov-sheet { max-width: 620px; margin: 0 auto; border-radius: 18px 18px 0 0; } }
+  .ov-sheet-head { position: sticky; top: 0; background: var(--bg); z-index: 2;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 10px 0 12px; }
+  .ov-sheet-grip { width: 38px; height: 4px; border-radius: 3px; background: var(--border); justify-self: start; }
+  .ov-sheet-title { justify-self: center; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; white-space: nowrap; }
+  .ov-sheet-head .modal-close { justify-self: end; }
+
+  /* Panels render body-only inside the sheet: hide their own headers, show only the active one */
   .ovpanel { margin-bottom: 0; }
   .ovpanel.hidden { display: none; }
-  .ovpanel.open { margin-bottom: 18px; }
   .ovpanel > .sched-now { display: none; }
   .week-streak { color: var(--accent); font-weight: 600; text-transform: none; letter-spacing: 0; }
 
@@ -795,26 +822,18 @@
 
   <section class="scorecard" id="scoreCard"></section>
 
+  <div class="nowline" id="nowLine"></div>
+
   <section class="toolgroup" id="toolgroup">
     <button class="toolgroup-bar" id="toolgroupBar" aria-expanded="false">
       <span class="tg-icon">🗂️</span>
       <div class="tg-main">
         <div class="tg-top"><span class="tg-title">Overview</span><span class="tg-sum" id="toolgroupSum"></span></div>
         <div class="tg-pillars" id="toolgroupPillars"></div>
-        <div class="tg-now" id="toolgroupNow"></div>
       </div>
       <span class="chev">▾</span>
     </button>
     <div class="toolgroup-body">
-      <div class="ov-tabs" id="ovTabs"></div>
-      <section class="sched" id="sched"></section>
-
-      <section class="sched" id="rewards"></section>
-
-      <section class="sched" id="goals"></section>
-
-      <section class="sched" id="metrics"></section>
-
       <section class="week">
         <div class="week-top">
           <span class="week-label" id="weekLabel">This week <span class="week-streak" id="weekStreak"></span></span>
@@ -862,6 +881,21 @@
     <div>Signed in, your board syncs across every device.</div>
   </footer>
 </div>
+
+<div class="ov-sheet-backdrop" id="ovSheetBackdrop">
+  <div class="ov-sheet" id="ovSheet">
+    <div class="ov-sheet-head">
+      <span class="ov-sheet-grip"></span>
+      <span class="ov-sheet-title" id="ovSheetTitle"></span>
+      <button class="modal-close" data-ovclose title="Close">×</button>
+    </div>
+    <section class="sched" id="sched"></section>
+    <section class="sched" id="rewards"></section>
+    <section class="sched" id="goals"></section>
+    <section class="sched" id="metrics"></section>
+  </div>
+</div>
+<nav class="ov-bar" id="ovBar" aria-label="Overview sections"></nav>
 
 <div class="modal-backdrop" id="tipsModal"></div>
 <div class="modal-backdrop" id="metricModal"></div>
@@ -1525,29 +1559,43 @@
   });
   renderToolgroup();
 
-  // ---- Overview tabs: Schedule / Rewards / Goals / Metrics as one tab row ----
-  // Replaces the four stacked panel headers. One tab is open at a time (tap again to
-  // close); each panel now renders only its body (its own .sched-now header is hidden),
-  // so the cluster is a single tab strip plus the active section. Persisted; badges keep
-  // the glanceable summary that used to live in each panel header.
+  // ---- Overview sections as a sticky bottom tab bar + bottom sheet ----
+  // Schedule / Rewards / Goals / Metrics live in a fixed bottom bar; tapping a tab slides
+  // up a sheet with that section's body (its own .sched-now header is hidden). One open at
+  // a time; tap the active tab, the backdrop, ×, or Esc to close. Starts closed each load.
+  // Tab badges keep the glanceable summary that used to live in the panel headers.
   var overviewTab = null;
-  try { var _ot = localStorage.getItem("compounder.ovTab"); if (_ot) overviewTab = _ot; } catch (e) {}
   function syncOverviewOpen() {
     schedOpen = overviewTab === "sched";
     rewardsOpen = overviewTab === "rewards";
     goalsOpen = overviewTab === "goals";
     metricsOpen = overviewTab === "metrics";
   }
+  var OV_TITLES = { sched: "Schedule", rewards: "Rewards", goals: "Goals", metrics: "Metrics" };
+  function applyOverviewSheet() {
+    var bd = document.getElementById("ovSheetBackdrop");
+    if (!bd) return;
+    var open = !!overviewTab;
+    bd.classList.toggle("open", open);
+    document.body.style.overflow = open ? "hidden" : "";
+    if (open) {
+      var title = document.getElementById("ovSheetTitle");
+      if (title) title.textContent = OV_TITLES[overviewTab] || "";
+      var sheet = document.getElementById("ovSheet"); if (sheet) sheet.scrollTop = 0;
+    }
+  }
   function setOverviewTab(name) {
     overviewTab = (overviewTab === name) ? null : name;
-    try { if (overviewTab) localStorage.setItem("compounder.ovTab", overviewTab); else localStorage.removeItem("compounder.ovTab"); } catch (e) {}
     if (overviewTab !== "sched") schedEditing = false;
     if (overviewTab !== "rewards") rewardsEditing = false;
     syncOverviewOpen();
     renderSchedule(); renderRewards(); renderGoals(); renderMetrics(); renderOverviewTabs();
+    applyOverviewSheet();
   }
+  function openOverviewTab(name) { if (overviewTab !== name) setOverviewTab(name); }
+  function closeOverviewSheet() { if (overviewTab) setOverviewTab(overviewTab); }
   function renderOverviewTabs() {
-    var host = document.getElementById("ovTabs");
+    var host = document.getElementById("ovBar");
     if (!host) return;
     var cur = schedule[currentBlockIndex()] || null;
     var pm = (typeof metricPrimary === "function") ? metricPrimary() : null;
@@ -1566,31 +1614,36 @@
         '<span class="ov-bd">' + escapeHtml(t.bd || "") + '</span></button>';
     }).join("");
   }
-  document.getElementById("ovTabs").addEventListener("click", function (ev) {
+  document.getElementById("ovBar").addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest("[data-ovtab]");
     if (b) setOverviewTab(b.getAttribute("data-ovtab"));
+  });
+  document.getElementById("ovSheetBackdrop").addEventListener("click", function (ev) {
+    if (ev.target.id === "ovSheetBackdrop" || (ev.target.closest && ev.target.closest("[data-ovclose]"))) closeOverviewSheet();
+  });
+  document.getElementById("nowLine").addEventListener("click", function () { openOverviewTab("sched"); });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && overviewTab && !metricDraft && !tipsOpenDom) closeOverviewSheet();
   });
 
   // The current time block + what to do now, shown on the collapsed Overview tile.
   // Reads the schedule data but is rendered independently of the Schedule component.
   function renderOverviewNow() {
-    var host = document.getElementById("toolgroupNow");
+    var host = document.getElementById("nowLine");
     if (!host) return;
-    if (!schedule || !schedule.length) { host.innerHTML = ""; return; }
+    if (!schedule || !schedule.length) { host.className = "nowline"; host.innerHTML = ""; return; }
     var idx = currentBlockIndex();
     var cur = schedule[idx];
-    if (!cur) { host.innerHTML = ""; return; }
+    if (!cur) { host.className = "nowline"; host.innerHTML = ""; return; }
     var next = schedule[(idx + 1) % schedule.length];
     var range = cur.start ? (fmt12(cur.start) + (next ? " – " + fmt12(next.start) : "")) : "";
-    var todo = "";
-    if (cur.dom && !domDone(dayEntry(todayKey), cur.dom)) {
-      todo = '<span class="tg-todo focus">→ ' + escapeHtml(domName(cur.dom)) + " — not logged yet</span>";
-    } else if (cur.note) {
-      todo = '<span class="tg-todo">' + escapeHtml(cur.note) + "</span>";
-    }
+    var needs = cur.dom && !domDone(dayEntry(todayKey), cur.dom);
+    var todo = needs ? '<span class="nl-todo">→ log ' + escapeHtml(domName(cur.dom)) + '</span>' : "";
+    host.className = "nowline" + (needs ? " focus" : "");
     host.innerHTML =
-      '<span class="tg-now-time">Now' + (range ? " · " + escapeHtml(range) : "") + "</span>" +
-      '<span class="tg-now-label">' + escapeHtml(cur.label) + "</span>" + todo;
+      '<span class="nl-time">Now' + (range ? " · " + escapeHtml(range) : "") + '</span>' +
+      '<span class="nl-label">' + escapeHtml(cur.label) + '</span>' + todo +
+      '<span class="nl-open">Schedule ›</span>';
   }
   // Today's pillar completion, as color-coded chips (done = filled, pending = outline).
   function renderOverviewPillars() {
