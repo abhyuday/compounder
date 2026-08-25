@@ -66,6 +66,11 @@
   h1 .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px var(--accent); }
   .date { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
   .tagline { color: var(--faint); font-size: 13px; margin-top: 6px; }
+  .creed { margin: 0 0 20px; padding: 14px 16px 14px 18px; border-left: 3px solid var(--accent);
+    background: linear-gradient(90deg, rgba(217,164,65,0.07), rgba(217,164,65,0)); border-radius: 0 10px 10px 0; }
+  .creed p { margin: 0; font-style: italic; font-size: 14px; line-height: 1.6; color: var(--muted); }
+  .creed .creed-punch { margin-top: 3px; color: var(--accent); font-weight: 600; }
+  @media (max-width: 480px) { .creed p { font-size: 13.5px; } }
 
   /* Week bar */
   .week {
@@ -817,6 +822,11 @@
     </div>
     <div class="tagline">Five points a day. Target is 25 a week — not 35. That number is the whole system.</div>
   </header>
+
+  <blockquote class="creed">
+    <p>Once more into the fray. Into the last good fight I'll ever know.</p>
+    <p class="creed-punch">Live and die on this day. Live and die on this day.</p>
+  </blockquote>
 
   <section class="auth-panel" id="authPanel"></section>
 
