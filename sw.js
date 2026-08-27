@@ -1,10 +1,24 @@
 // Compounder service worker: network-first for the app shell so deploys always
 // win when online, cache fallback so the app loads offline. Only the same-origin
 // shell and the Supabase JS CDN are cached — API/auth requests pass straight through.
-var CACHE = "compounder-v1";
+var CACHE = "compounder-v2";
+// Precached so it's available offline even if never played online. Media uses Range
+// requests (206), which the runtime handler below won't cache — so precache the full file.
+var PRECACHE = ["live-and-die-on-this-day.mp3"];
 
-self.addEventListener("install", function () { self.skipWaiting(); });
-self.addEventListener("activate", function (e) { e.waitUntil(self.clients.claim()); });
+self.addEventListener("install", function (e) {
+  e.waitUntil(
+    caches.open(CACHE).then(function (c) { return c.addAll(PRECACHE); }).catch(function () {})
+      .then(function () { return self.skipWaiting(); })
+  );
+});
+self.addEventListener("activate", function (e) {
+  e.waitUntil(
+    caches.keys().then(function (keys) {
+      return Promise.all(keys.map(function (k) { if (k !== CACHE) return caches.delete(k); }));
+    }).then(function () { return self.clients.claim(); })
+  );
+});
 
 self.addEventListener("fetch", function (e) {
   var req = e.request;
