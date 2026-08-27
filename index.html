@@ -66,10 +66,18 @@
   h1 .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px var(--accent); }
   .date { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
   .tagline { color: var(--faint); font-size: 13px; margin-top: 6px; }
-  .creed { margin: 0 0 20px; padding: 14px 16px 14px 18px; border-left: 3px solid var(--accent);
-    background: linear-gradient(90deg, rgba(217,164,65,0.07), rgba(217,164,65,0)); border-radius: 0 10px 10px 0; }
+  .creed { display: flex; align-items: center; gap: 14px; margin: 0 0 20px; padding: 14px 16px 14px 18px;
+    border-left: 3px solid var(--accent); background: linear-gradient(90deg, rgba(217,164,65,0.07), rgba(217,164,65,0)); border-radius: 0 10px 10px 0; }
+  .creed-text { flex: 1 1 auto; min-width: 0; }
   .creed p { margin: 0; font-style: italic; font-size: 14px; line-height: 1.6; color: var(--muted); }
   .creed .creed-punch { margin-top: 3px; color: var(--accent); font-weight: 600; }
+  .creed-play { flex: 0 0 auto; width: 42px; height: 42px; padding-left: 2px; border-radius: 50%;
+    border: 1px solid var(--accent); background: rgba(217,164,65,0.12); color: var(--accent);
+    font-size: 15px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background .15s ease, transform .1s ease; }
+  .creed-play:hover { background: rgba(217,164,65,0.22); }
+  .creed-play:active { transform: scale(.94); }
+  .creed-play.playing { padding-left: 0; background: var(--accent); color: #241a04; }
   @media (max-width: 480px) { .creed p { font-size: 13.5px; } }
 
   /* Week bar */
@@ -824,8 +832,12 @@
   </header>
 
   <blockquote class="creed">
-    <p>Once more into the fray. Into the last good fight I'll ever know.</p>
-    <p class="creed-punch">Live and die on this day. Live and die on this day.</p>
+    <div class="creed-text">
+      <p>Once more into the fray. Into the last good fight I'll ever know.</p>
+      <p class="creed-punch">Live and die on this day. Live and die on this day.</p>
+    </div>
+    <button class="creed-play" id="creedPlay" aria-label="Play the creed" title="Play">▶</button>
+    <audio id="creedAudio" preload="none" src="live-and-die-on-this-day.mp3"></audio>
   </blockquote>
 
   <section class="auth-panel" id="authPanel"></section>
@@ -1631,6 +1643,16 @@
     if (ev.target.id === "ovSheetBackdrop" || (ev.target.closest && ev.target.closest("[data-ovclose]"))) closeOverviewSheet();
   });
   document.getElementById("nowLine").addEventListener("click", function () { openOverviewTab("sched"); });
+
+  // Creed audio: tap the play button to hear "Live and Die on This Day".
+  (function () {
+    var au = document.getElementById("creedAudio"), btn = document.getElementById("creedPlay");
+    if (!au || !btn) return;
+    btn.addEventListener("click", function () { if (au.paused) { au.play().catch(function () {}); } else { au.pause(); } });
+    au.addEventListener("play", function () { btn.textContent = "⏸"; btn.classList.add("playing"); btn.setAttribute("aria-label", "Pause the creed"); });
+    au.addEventListener("pause", function () { btn.textContent = "▶"; btn.classList.remove("playing"); btn.setAttribute("aria-label", "Play the creed"); });
+    au.addEventListener("ended", function () { au.currentTime = 0; });
+  })();
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && overviewTab && !metricDraft && !tipsOpenDom) closeOverviewSheet();
   });
