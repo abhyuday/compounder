@@ -80,6 +80,24 @@
   .creed-play.playing { padding-left: 0; background: var(--accent); color: #241a04; }
   @media (max-width: 480px) { .creed p { font-size: 13.5px; } }
 
+  /* Daily "Today" hero — rotates each day so the top always has something fresh */
+  .today-hero { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 15px 16px; margin-bottom: 18px; box-shadow: var(--shadow); }
+  .th-head { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--faint); font-weight: 700; }
+  .th-mantra { font-size: 15px; line-height: 1.5; color: var(--text); font-style: italic; margin: 7px 0 12px; }
+  .th-focus { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-family: inherit; }
+  .th-focus:hover { border-color: #33404f; }
+  .th-focus-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; font-weight: 700;
+    color: #241a04; background: var(--accent); border-radius: 999px; padding: 3px 7px; }
+  .th-focus-dom { flex: 0 0 auto; font-size: 13.5px; font-weight: 700; }
+  .th-focus-hint { flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .th-focus-go { flex: 0 0 auto; color: var(--faint); font-size: 16px; }
+  .th-focus.done { display: block; cursor: default; color: var(--done); font-size: 13px; font-weight: 600;
+    background: var(--done-soft); border-color: transparent; }
+  .th-read { margin-top: 10px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .th-read b { color: var(--text); font-weight: 600; }
+
   /* Week bar */
   .week {
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -843,6 +861,8 @@
   <section class="auth-panel" id="authPanel"></section>
 
   <section class="scorecard" id="scoreCard"></section>
+
+  <section class="today-hero" id="todayHero"></section>
 
   <div class="nowline" id="nowLine"></div>
 
@@ -2720,6 +2740,87 @@
     if (ev.target.closest("[data-sctoggle]")) { scoreOpen = !scoreOpen; renderScore(); }
   });
 
+  // ======================= Daily "Today" hero (fresh each day; fights novelty decay) =======================
+  // A top card that changes every day: a rotating mantra, today's single focus (the
+  // dimension to nudge, tap to jump to it), and a one-line read of your score. Deterministic
+  // per calendar day so it's stable within a day but new tomorrow.
+  var MANTRAS = [
+    "Discipline is choosing what you want most over what you want now.",
+    "You don't rise to your goals; you fall to your systems.",
+    "Small hinges swing big doors. Move one today.",
+    "The obstacle is the way.",
+    "Do the hard thing while it's still small.",
+    "Consistency compounds. Just show up.",
+    "A bad day logged beats a good day forgotten.",
+    "Motion is not progress. Move the needle.",
+    "You are what you repeatedly do.",
+    "Comfort is a slow death. Lean into the resistance.",
+    "Protect the streak of showing up — not of perfection.",
+    "One percent better is still better.",
+    "The work you avoid is the work that grows you.",
+    "Sow today what you want to harvest in a year.",
+    "Amor fati — love what you must do.",
+    "Presence is the gift. Put the phone down.",
+    "Rest is part of the work, not a reward for it.",
+    "Your future self is watching. Make them proud.",
+    "Momentum beats motivation.",
+    "Hard choices, easy life. Easy choices, hard life.",
+    "Fall in love with the process, not the outcome.",
+    "Every rep is a vote for who you're becoming.",
+    "Stack one good decision. Then another.",
+    "Win on a bad day — that's the whole game."
+  ];
+  var FOCUS_HINT = {
+    hard:   "Do the one thing you'd rather avoid.",
+    money:  "One 15-minute move that compounds.",
+    health: "Two of three: move, eat clean, sleep.",
+    family: "Be present — and face the friction.",
+    self:   "Two of four: resolve, sincerity, skills, rest."
+  };
+  function todayMantra() {
+    var dayNum = Math.floor(parseKey(todayKey).getTime() / 86400000);
+    return MANTRAS[((dayNum % MANTRAS.length) + MANTRAS.length) % MANTRAS.length];
+  }
+  function todayScoreRead() {
+    var sc = (typeof computeScoreAt === "function") ? computeScoreAt(todayKey) : null;
+    if (!sc) return "Log today to start your Compounder Score.";
+    var base = (typeof computeBaseline === "function") ? computeBaseline() : null;
+    if (base && base.forming) return "Baseline still forming — just keep showing up.";
+    if (sc.band && (sc.band.name === "Thriving" || sc.band.name === "Surging"))
+      return "You're in the <b>healthy zone</b> — hold it, don't chase the max.";
+    var w = weakestDim(sc);
+    if (w && w.rate < HEALTHY_RATE)
+      return "<b>" + escapeHtml(w.name) + "</b> is your lever today — one deliberate hit moves the score most.";
+    return "Steady. Keep the needle moving.";
+  }
+  function renderTodayHero() {
+    var host = document.getElementById("todayHero");
+    if (!host) return;
+    var d = parseKey(todayKey);
+    var dateStr = DAYS[d.getDay()] + ", " + MONTHS[d.getMonth()] + " " + d.getDate();
+    var rec = recommendedDomain(); // always today-based (reads today's entry)
+    var focusHtml = rec
+      ? '<button class="th-focus" data-focus="' + rec + '">' +
+          '<span class="th-focus-tag">Start here</span>' +
+          '<span class="th-focus-dom" style="color:' + wlColor(rec) + '">' + escapeHtml(domName(rec)) + '</span>' +
+          '<span class="th-focus-hint">' + escapeHtml(FOCUS_HINT[rec] || "") + '</span>' +
+          '<span class="th-focus-go">›</span></button>'
+      : '<div class="th-focus done">✓ Every dimension moved today. Bank it — don\'t chase the max.</div>';
+    host.innerHTML =
+      '<div class="th-head">Today · ' + escapeHtml(dateStr) + '</div>' +
+      '<div class="th-mantra">' + escapeHtml(todayMantra()) + '</div>' +
+      focusHtml +
+      '<div class="th-read">' + todayScoreRead() + '</div>';
+  }
+  document.getElementById("todayHero").addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-focus]");
+    if (!b) return;
+    var key = b.getAttribute("data-focus");
+    if (selectedKey !== todayKey) selectDay(todayKey);
+    var card = document.querySelector('.card[data-domain="' + key + '"]');
+    if (card) { delete collapsedCards[key]; expandedCards[key] = true; renderCards(); card = document.querySelector('.card[data-domain="' + key + '"]'); if (card) card.scrollIntoView({ behavior: "smooth", block: "center" }); }
+  });
+
   // ======================= Tips per dimension (editable, synced) =======================
   // A modal of "ideal state" bullets for each pillar, seeded from popular sources
   // and fully editable. The aim: follow these to maximize that area with the least
@@ -3353,6 +3454,7 @@
   function renderAll() {
     syncOverviewOpen(); // keep panel open-state in sync with the active Overview tab
     renderScore();
+    renderTodayHero();
     renderDaySwitch();
     if (!anyEditorFocused()) renderCards(); // don't steal focus while a note/why is being typed
     renderToday();
