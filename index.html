@@ -163,17 +163,6 @@
   .week-rew-foot { margin-top: 8px; font-size: 12px; color: var(--muted); }
   .week-rew-foot b { color: var(--text); }
 
-  /* Persistent "Now" line — the current schedule block, always visible; tap to open Schedule */
-  .nowline { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border);
-    border-radius: 12px; padding: 11px 14px; margin-bottom: 18px; cursor: pointer; box-shadow: var(--shadow); }
-  .nowline:hover { border-color: #33404f; }
-  .nowline.focus { border-color: rgba(217,164,65,0.55); }
-  .nowline .nl-time { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 700; flex: 0 0 auto; }
-  .nowline .nl-label { font-size: 14px; font-weight: 600; color: var(--text); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .nowline .nl-todo { font-size: 12px; color: var(--accent); flex: 0 0 auto; }
-  .nowline .nl-open { margin-left: auto; font-size: 12px; color: var(--faint); flex: 0 0 auto; }
-  .nowline:empty { display: none; }
-
   /* Sticky bottom bar: Schedule / Rewards / Goals / Metrics */
   .ov-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 250; display: flex; gap: 2px;
     background: var(--panel); border-top: 1px solid var(--border);
@@ -915,8 +904,6 @@
   <section class="wir" id="weekReview"></section>
 
   <section class="otd" id="onThisDay"></section>
-
-  <div class="nowline" id="nowLine"></div>
 
   <section class="toolgroup" id="toolgroup">
     <button class="toolgroup-bar" id="toolgroupBar" aria-expanded="false">
@@ -1696,8 +1683,10 @@
     var pm = (typeof metricPrimary === "function") ? metricPrimary() : null;
     var mLast = pm ? metricLatest(pm) : null;
     var activeGoals = goals.filter(function (g) { return !g.archived; }).length;
+    var cur = (schedule && schedule.length) ? schedule[currentBlockIndex()] : null; // the block happening now
+    var schedBd = cur ? ((cur.start ? fmt12(cur.start) + " · " : "") + cur.label) : "";
     var tabs = [
-      { key: "sched",   ic: "🗓️", tl: "Schedule", bd: "" }, // current block already shown on the Now line
+      { key: "sched",   ic: "🗓️", tl: "Schedule", bd: schedBd }, // now: time · what to do
       { key: "rewards", ic: "🎁", tl: "Rewards",  bd: walletBalance() + " saved" },
       { key: "goals",   ic: "🎯", tl: "Goals",    bd: activeGoals ? (activeGoals + " active") : "none" },
       { key: "metrics", ic: "⚖️", tl: "Metrics",  bd: mLast ? (fmtMetric(pm, mLast.value) + " " + pm.unit) : "—" }
@@ -1716,7 +1705,6 @@
   document.getElementById("ovSheetBackdrop").addEventListener("click", function (ev) {
     if (ev.target.id === "ovSheetBackdrop" || (ev.target.closest && ev.target.closest("[data-ovclose]"))) closeOverviewSheet();
   });
-  document.getElementById("nowLine").addEventListener("click", function () { openOverviewTab("sched"); });
 
   // Creed audio: tap the play button to hear "Live and Die on This Day".
   (function () {
@@ -1731,25 +1719,6 @@
     if (ev.key === "Escape" && overviewTab && !metricDraft && !tipsOpenDom) closeOverviewSheet();
   });
 
-  // The current time block + what to do now, shown on the collapsed Overview tile.
-  // Reads the schedule data but is rendered independently of the Schedule component.
-  function renderOverviewNow() {
-    var host = document.getElementById("nowLine");
-    if (!host) return;
-    if (!schedule || !schedule.length) { host.className = "nowline"; host.innerHTML = ""; return; }
-    var idx = currentBlockIndex();
-    var cur = schedule[idx];
-    if (!cur) { host.className = "nowline"; host.innerHTML = ""; return; }
-    var next = schedule[(idx + 1) % schedule.length];
-    var range = cur.start ? (fmt12(cur.start) + (next ? " – " + fmt12(next.start) : "")) : "";
-    var needs = cur.dom && !domDone(dayEntry(todayKey), cur.dom);
-    var todo = needs ? '<span class="nl-todo">→ log ' + escapeHtml(domName(cur.dom)) + '</span>' : "";
-    host.className = "nowline" + (needs ? " focus" : "");
-    host.innerHTML =
-      '<span class="nl-time">Now' + (range ? " · " + escapeHtml(range) : "") + '</span>' +
-      '<span class="nl-label">' + escapeHtml(cur.label) + '</span>' + todo +
-      '<span class="nl-open">Schedule ›</span>';
-  }
   // Today's pillar completion, as color-coded chips (done = filled, pending = outline).
   function renderOverviewPillars() {
     var host = document.getElementById("toolgroupPillars");
@@ -3762,7 +3731,6 @@
     if (!metricDraft) renderMetrics();
     renderOverviewTabs();
     if (!reviewInputFocused()) renderHistory();
-    renderOverviewNow();
     renderOverviewPillars();
   }
 
@@ -3781,7 +3749,7 @@
   function loadDefaultSched() { return DEFAULT_SCHED.map(function (b) { return { start: b.start, label: b.label, note: b.note, dom: b.dom }; }); }
 
   // Keep the "Now" block current through the day.
-  setInterval(function () { if (!schedEditing) renderSchedule(); renderOverviewNow(); }, 60000);
+  setInterval(function () { if (!schedEditing) renderSchedule(); renderOverviewTabs(); }, 60000);
 
   // Day switcher controls.
   document.getElementById("dayPrev").addEventListener("click", function () {
