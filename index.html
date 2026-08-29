@@ -129,6 +129,12 @@
   .wir-delta.up { color: var(--done); } .wir-delta.down { color: var(--comfort); }
   @media (max-width: 400px) { .wir-stat b { font-size: 17px; } .wir-stat span { font-size: 10px; } }
 
+  /* "On this day" recall */
+  .otd { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 18px; box-shadow: var(--shadow); }
+  .otd:empty { display: none; }
+  .otd-head { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); font-weight: 700; }
+  .otd-note { margin-top: 6px; font-size: 14px; color: var(--text); font-style: italic; line-height: 1.5; }
+
   /* Week bar */
   .week {
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -303,6 +309,14 @@
   .rew-buy { background: var(--accent); color: #241a04; border: none; border-radius: 8px; padding: 5px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; flex: 0 0 auto; }
   .rew-buy:hover { filter: brightness(1.06); }
   .rew-buy:disabled { background: var(--panel); color: var(--faint); cursor: default; }
+  .rew-next { font-size: 12.5px; color: var(--muted); margin-bottom: 9px; }
+  .rew-next b { color: var(--text); font-weight: 700; }
+  .rew-next.all { color: var(--accent); }
+  .rew-item.next { border: 1px solid rgba(217,164,65,0.45); border-radius: 9px; }
+  .rew-save { flex: 0 0 auto; width: 84px; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+  .rew-save-bar { width: 100%; height: 5px; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .rew-save-fill { height: 100%; background: linear-gradient(90deg, #b9781f, var(--accent)); border-radius: 4px; transition: width .35s ease; }
+  .rew-save-txt { font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
   #rewards .rlabel-in { flex: 1; min-width: 120px; }
   #rewards .rcost-in { width: 56px; flex: 0 0 auto; }
   #rewards .rew-pt { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
@@ -807,6 +821,9 @@
   .sc-tip b { color: var(--text); font-weight: 600; }
   .sc-tip-ic { flex: 0 0 auto; }
   .sc-legend { font-size: 11px; color: var(--faint); margin-top: 13px; line-height: 1.55; }
+  .sc-trend { margin-top: 15px; border-top: 1px solid var(--border); padding-top: 13px; }
+  .sc-trend-top { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+  .sc-spark { width: 100%; height: auto; display: block; overflow: visible; }
 
   /* Drag-to-reorder (touch + mouse) */
   .drag-handle { flex: 0 0 auto; cursor: grab; touch-action: none; color: var(--faint); font-size: 15px; line-height: 1; padding: 4px 6px; opacity: .65; user-select: none; -webkit-user-select: none; align-self: center; }
@@ -896,6 +913,8 @@
   <section class="today-hero" id="todayHero"></section>
 
   <section class="wir" id="weekReview"></section>
+
+  <section class="otd" id="onThisDay"></section>
 
   <div class="nowline" id="nowLine"></div>
 
@@ -2707,6 +2726,33 @@
   }
 
   var scoreOpen = false;
+  // Score sampled once per week over the trailing weeks — the line to watch rise.
+  function scoreHistory(weeks) {
+    var earliest = earliestDayKey(); if (!earliest) return [];
+    var out = [];
+    for (var w = weeks - 1; w >= 0; w--) {
+      var endK = ymd(addDays(today, -7 * w));
+      if (endK < earliest) continue;
+      var sc = computeScoreAt(endK);
+      if (sc) out.push(sc.score);
+    }
+    return out;
+  }
+  function scoreSparkSVG(vals, col) {
+    if (!vals || vals.length < 2) return "";
+    var W = 300, H = 58, padX = 5, padY = 8;
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    if (max - min < 6) { var mid = (max + min) / 2; min = Math.max(0, mid - 4); max = Math.min(100, mid + 4); }
+    var span = (max - min) || 1;
+    function X(i) { return padX + (i / (vals.length - 1)) * (W - 2 * padX); }
+    function Y(v) { return padY + (1 - (v - min) / span) * (H - 2 * padY); }
+    var path = vals.map(function (v, i) { return (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }).join(" ");
+    var dots = vals.map(function (v, i) {
+      var last = i === vals.length - 1;
+      return '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="' + (last ? 3 : 2) + '" fill="' + (last ? col : "var(--faint)") + '"' + (last ? "" : ' opacity="0.5"') + '/>';
+    }).join("");
+    return '<svg class="sc-spark" viewBox="0 0 ' + W + ' ' + H + '"><path d="' + path + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' + dots + '</svg>';
+  }
   function ringSVG(sc, base) {
     var r = 44, cx = 60, cy = 60, CIRC = 2 * Math.PI * r;
     function seg(offsetFrac, lenFrac, color, width, cap) {
@@ -2765,7 +2811,11 @@
           '<div class="sc-bar"><div class="sc-bar-fill" style="width:' + Math.round(l.val) + '%;background:' + col + '"></div></div></div>';
       }).join("");
       var tips = scoreTips(sc).map(function (t) { return '<div class="sc-tip"><span class="sc-tip-ic">' + t.icon + '</span><span>' + t.text + '</span></div>'; }).join("");
-      body = '<div class="sc-body"><div class="sc-levers">' + bars + '</div>' +
+      var hist = scoreHistory(10);
+      var trend = (hist.length >= 2)
+        ? '<div class="sc-trend"><div class="sc-trend-top">Score · last ' + hist.length + ' weeks</div>' + scoreSparkSVG(hist, col) + '</div>'
+        : "";
+      body = '<div class="sc-body"><div class="sc-levers">' + bars + '</div>' + trend +
         (tips ? '<div class="sc-tips">' + tips + '</div>' : "") +
         '<div class="sc-legend">Trailing 4 weeks. The green band is the healthy zone — hitting ~25/week in balance settles here. Reaching 100 needs a still-improving month, by design: a perfect week is a trap.</div></div>';
     }
@@ -2968,12 +3018,14 @@
   function wirSeen() { try { return localStorage.getItem(wirStoreKey()); } catch (e) { return null; } }
   function wirDismiss(mondayKey) { try { localStorage.setItem(wirStoreKey(), mondayKey); } catch (e) {} renderWeekReview(); }
   function weekWeakestDim(monday) {
-    var best = null;
+    var lo = null, hi = -1;
     DOMAINS.forEach(function (dom) {
       var hit = 0; for (var i = 0; i < 7; i++) if (domDone(dayEntry(ymd(addDays(monday, i))), dom.key)) hit++;
-      if (!best || hit < best.hit) best = { name: dom.name, hit: hit };
+      if (!lo || hit < lo.hit) lo = { name: dom.name, hit: hit };
+      if (hit > hi) hi = hit;
     });
-    return best;
+    lo.genuine = lo.hit < hi; // a real gap, not just an all-tied week
+    return lo;
   }
   function weekBestDay(monday) {
     var best = null;
@@ -3009,7 +3061,9 @@
         '<div class="wir-stat"><b>' + pts + '</b><span>/ 35 points</span></div>' +
         '<div class="wir-stat"><b>' + moved + '</b><span>days moved</span></div>' +
         '<div class="wir-stat"><b>' + best.p + '</b><span>best day (' + DAYS[parseKey(best.k).getDay()] + ')</span></div>' +
-        '<div class="wir-stat"><b>' + escapeHtml(weak.name) + '</b><span>weak link</span></div>' +
+        (weak.genuine
+          ? '<div class="wir-stat"><b>' + escapeHtml(weak.name) + '</b><span>weak link</span></div>'
+          : '<div class="wir-stat"><b>✓</b><span>all balanced</span></div>') +
       '</div>' +
       '<div class="wir-foot">' + line + " " + deltaChip + '</div>';
   }
@@ -3017,6 +3071,36 @@
     var b = ev.target.closest && ev.target.closest("[data-wirdismiss]");
     if (b) wirDismiss(b.getAttribute("data-wirdismiss"));
   });
+
+  // ======================= "On this day" — resurface a past note on real anniversaries =======================
+  function anyNoteOn(dayKey) {
+    var e = data[dayKey]; if (!e || !e.notes) return null;
+    var keys = Object.keys(e.notes);
+    for (var i = 0; i < keys.length; i++) {
+      var arr = notesArr(e, keys[i]);
+      for (var j = 0; j < arr.length; j++) { if (arr[j].text && arr[j].text.trim()) return arr[j].text.trim(); }
+    }
+    return null;
+  }
+  function onThisDayMatch() {
+    var intervals = [{ n: 365, l: "a year ago" }, { n: 182, l: "6 months ago" }, { n: 90, l: "3 months ago" }, { n: 30, l: "a month ago" }];
+    for (var i = 0; i < intervals.length; i++) {
+      for (var off = -1; off <= 1; off++) {
+        var k = ymd(addDays(today, -intervals[i].n + off));
+        var t = anyNoteOn(k);
+        if (t) return { label: intervals[i].l, text: t };
+      }
+    }
+    return null;
+  }
+  function renderOnThisDay() {
+    var host = document.getElementById("onThisDay");
+    if (!host) return;
+    var m = onThisDayMatch();
+    host.innerHTML = m
+      ? '<div class="otd-head">🕰️ On this day · ' + m.label + '</div><div class="otd-note">“' + escapeHtml(m.text) + '”</div>'
+      : "";
+  }
 
   // ======================= Tips per dimension (editable, synced) =======================
   // A modal of "ideal state" bullets for each pillar, seeded from popular sources
@@ -3473,12 +3557,23 @@
               (isToday ? '<button class="rew-undo" data-undo="' + i + '" title="Undo">×</button>' : '') + '</div>';
           }).join("") + '</div>'
         : (isToday ? "" : '<div class="rew-empty">No rewards bought this day.</div>');
-      var items = isToday ? '<div class="rew-list">' + rewardsCat.map(function (r, i) {
-        var afford = wallet >= (+r.cost || 0);
-        return '<div class="rew-item">' +
+      // Tiers: the cheapest reward you can't yet afford becomes the "saving toward" target;
+      // every unaffordable reward shows a progress bar so bigger rewards read as goals.
+      var nextIdx = -1, nextCost = Infinity;
+      rewardsCat.forEach(function (r, i) { var c = +r.cost || 0; if (wallet < c && c < nextCost) { nextCost = c; nextIdx = i; } });
+      var tier = nextIdx >= 0
+        ? '<div class="rew-next">Saving toward <b>' + escapeHtml(rewardsCat[nextIdx].label) + '</b> · <b>' + (nextCost - wallet) + '</b> to go</div>'
+        : (wallet > 0 && rewardsCat.length ? '<div class="rew-next all">Everything\'s unlocked — treat yourself.</div>' : "");
+      var items = isToday ? tier + '<div class="rew-list">' + rewardsCat.map(function (r, i) {
+        var cost = +r.cost || 0, afford = wallet >= cost;
+        var right = afford
+          ? '<button class="rew-buy" data-buy="' + i + '">Buy</button>'
+          : '<div class="rew-save"><div class="rew-save-bar"><div class="rew-save-fill" style="width:' + (cost ? Math.min(100, wallet / cost * 100) : 0) + '%"></div></div>' +
+            '<span class="rew-save-txt">' + (cost - wallet) + ' more</span></div>';
+        return '<div class="rew-item' + (i === nextIdx ? " next" : "") + '">' +
           '<span class="rew-label">' + escapeHtml(r.label) + '</span>' +
-          '<span class="rew-cost">' + (+r.cost || 0) + ' pt</span>' +
-          '<button class="rew-buy" data-buy="' + i + '"' + (afford ? "" : " disabled") + '>Buy</button>' +
+          '<span class="rew-cost">' + cost + ' pt</span>' +
+          right +
           '</div>';
       }).join("") + '</div>' : "";
       var actions = isToday ? '<div class="sched-actions"><button class="lnk" data-ract="edit">Edit rewards</button></div>' : "";
@@ -3653,6 +3748,7 @@
     renderScore();
     renderTodayHero();
     renderWeekReview();
+    renderOnThisDay();
     checkMilestones();
     renderMilestones();
     renderDaySwitch();
