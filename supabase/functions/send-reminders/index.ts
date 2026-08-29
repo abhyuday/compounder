@@ -29,6 +29,28 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
   evening: { title: "Compounder", body: "Lock in today's points before they reset at midnight." },
 };
 
+// Two-beat rhythm with rotating copy so the nudge is never the same twice:
+// mornings set an intention, evenings close the day (evening still gives way to the
+// personalized "what's still open" body when that day's row is available).
+const MORNING_LINES = [
+  "New day. What's the one hard thing you'll do?",
+  "Set the intention — which point matters most today?",
+  "Move the needle early. Start with the one you'd rather avoid.",
+  "Before the noise: what will make today count?",
+  "A fresh 5 to earn. Name your first move.",
+  "Win the morning. Which domain gets your best hour?",
+  "Today is a vote for who you're becoming. Cast it.",
+  "Begin. One small hard thing beats a perfect plan.",
+];
+const EVENING_LINES = [
+  "Close the day — log what you moved.",
+  "Before midnight, bank today's points.",
+  "How did today go? Lock it in.",
+  "Reflect and record — what moved today?",
+  "Day's end. Capture the wins, however small.",
+];
+function pickByDay(arr: string[]): string { return arr[Math.floor(Date.now() / 86400000) % arr.length]; }
+
 // The five domains and how each earns its point (mirrors the app's scoring).
 function openDomains(row: any): string[] {
   if (!row) return ["Comfort Zone", "Money", "Health", "Family", "Self"];
@@ -71,6 +93,10 @@ Deno.serve(async (req) => {
   try { const b = await req.json(); if (b && typeof b.kind === "string") kind = b.kind; } catch { /* default */ }
   const m = MESSAGES[kind] ?? MESSAGES.evening;
   const personalize = kind === "evening" || kind === "midday";
+  // Rotating base copy for the two main beats; other kinds keep their fixed line.
+  const baseBody = kind === "morning" ? pickByDay(MORNING_LINES)
+    : kind === "evening" ? pickByDay(EVENING_LINES)
+    : m.body;
 
   const { data: settings, error } = await sb.from("user_settings").select("user_id,reminders");
   if (error) return new Response("settings error: " + error.message, { status: 500 });
@@ -105,7 +131,7 @@ Deno.serve(async (req) => {
 
   let sent = 0;
   for (const s of subs ?? []) {
-    const body = (personalize && bodyByUser[s.user_id]) ? bodyByUser[s.user_id] : m.body;
+    const body = (personalize && bodyByUser[s.user_id]) ? bodyByUser[s.user_id] : baseBody;
     const payload = JSON.stringify({
       title: m.title,
       body,

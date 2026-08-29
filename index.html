@@ -98,6 +98,37 @@
   .th-read { margin-top: 10px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
   .th-read b { color: var(--text); font-weight: 600; }
 
+  /* Milestones grid */
+  #milestones .rew-emoji { font-size: 15px; flex: 0 0 auto; }
+  #milestones .hist-sum { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #milestones .chev { margin-left: 10px; }
+  .ms-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  @media (min-width: 480px) { .ms-grid { grid-template-columns: repeat(3, 1fr); } }
+  .ms-badge { background: var(--panel-2); border: 1px solid var(--border); border-radius: 11px; padding: 12px 11px; text-align: center; opacity: .5; filter: grayscale(0.8); }
+  .ms-badge.on { opacity: 1; filter: none; border-color: rgba(217,164,65,0.4); }
+  .ms-ic { font-size: 24px; line-height: 1; }
+  .ms-t { font-size: 12.5px; font-weight: 700; color: var(--text); margin-top: 7px; }
+  .ms-d { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  .ms-when { font-size: 10px; color: var(--accent); margin-top: 6px; font-weight: 600; }
+  .ms-lock { font-size: 10px; color: var(--faint); margin-top: 6px; }
+
+  /* Week in Review card */
+  .wir { background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 18px; box-shadow: var(--shadow); }
+  .wir:empty { display: none; }
+  .wir-head { display: flex; align-items: center; justify-content: space-between; }
+  .wir-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+  .wir-x { background: none; border: none; color: var(--faint); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 2px; }
+  .wir-x:hover { color: var(--text); }
+  .wir-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 4px; }
+  .wir-stat { text-align: center; }
+  .wir-stat b { display: block; font-size: 19px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .wir-stat span { font-size: 10.5px; color: var(--faint); }
+  .wir-foot { margin-top: 10px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .wir-delta { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .wir-delta.up { color: var(--done); } .wir-delta.down { color: var(--comfort); }
+  @media (max-width: 400px) { .wir-stat b { font-size: 17px; } .wir-stat span { font-size: 10px; } }
+
   /* Week bar */
   .week {
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -864,6 +895,8 @@
 
   <section class="today-hero" id="todayHero"></section>
 
+  <section class="wir" id="weekReview"></section>
+
   <div class="nowline" id="nowLine"></div>
 
   <section class="toolgroup" id="toolgroup">
@@ -915,6 +948,8 @@
     </div>
     <table class="grid" id="grid"></table>
   </section>
+
+  <section class="sched" id="milestones" style="margin-top:24px"></section>
 
   <section class="sched" id="history" style="margin-top:24px"></section>
 
@@ -2821,6 +2856,168 @@
     if (card) { delete collapsedCards[key]; expandedCards[key] = true; renderCards(); card = document.querySelector('.card[data-domain="' + key + '"]'); if (card) card.scrollIntoView({ behavior: "smooth", block: "center" }); }
   });
 
+  // ======================= Milestones (earned, sticky, synced) =======================
+  // Collectible one-time badges for durable, non-perfectionist wins. Once earned they
+  // stick (even if the condition later lapses). The backlog on first run is adopted
+  // silently; only milestones crossed live get a celebration.
+  var MILESTONES_KEY = "compounder.milestones";
+  var earnedMs = {};   // { id: earnedTimestampMs }
+  var earnedMsTs = 0;
+  var milestonesOpen = false;
+  function elapsedDays() { var e = earliestDayKey(); if (!e) return 0; return Math.floor((parseKey(todayKey) - parseKey(e)) / 86400000) + 1; }
+  function weekAllFiveHit(monday) {
+    var hits = {}; DOMAINS.forEach(function (d) { hits[d.key] = 0; });
+    var total = 0;
+    for (var i = 0; i < 7; i++) { var k = ymd(addDays(monday, i)); var e = dayEntry(k); DOMAINS.forEach(function (d) { if (domDone(e, d.key)) hits[d.key]++; }); total += dayPoints(k); }
+    return DOMAINS.every(function (d) { return hits[d.key] >= 1; }) && total >= TARGET;
+  }
+  function anyBalancedWeek() {
+    var e = earliestDayKey(); if (!e) return false;
+    var m = mondayOf(parseKey(e)), guard = 0;
+    while (m <= thisMonday && guard++ < 520) { if (weekAllFiveHit(m)) return true; m = addDays(m, 7); }
+    return false;
+  }
+  var MILESTONES = [
+    { id: "first",    ic: "🌱", t: "First Step",     d: "Logged your very first day.",              test: function () { return !!earliestDayKey(); } },
+    { id: "week",     ic: "📅", t: "One Week In",    d: "Seven days since you started.",            test: function () { return elapsedDays() >= 7; } },
+    { id: "target",   ic: "🎯", t: "On Target",      d: "Hit 25 points in a week.",                 test: function () { return lifetimeStats().weeksTarget >= 1; } },
+    { id: "balanced", ic: "⚖️", t: "Balanced Week",  d: "A week where all five moved and you hit target.", test: anyBalancedWeek },
+    { id: "needle14", ic: "🔗", t: "Two-Week Chain", d: "A 14-day needle-moved streak.",            test: function () { return moveStreak() >= 14; } },
+    { id: "month",    ic: "🗓️", t: "One Month In",   d: "Thirty days since you started.",           test: function () { return elapsedDays() >= 30; } },
+    { id: "target4",  ic: "🔥", t: "Four in a Row",  d: "Four straight weeks at target.",           test: function () { return weekStreak() >= 4; } },
+    { id: "thriving", ic: "🌟", t: "Thriving",       d: "Your score reached the healthy zone (80+).", test: function () { var s = computeScoreAt(todayKey); return !!(s && s.score >= 80); } },
+    { id: "saver",    ic: "💰", t: "Saver",          d: "Banked 50 reward points.",                 test: function () { return walletBalance() >= 50; } },
+    { id: "goal",     ic: "🏆", t: "Goal Achieved",  d: "Completed a top-level goal.",              test: function () { return goals.some(function (g) { return g.archived; }); } },
+    { id: "reviewer", ic: "📝", t: "Reflective",     d: "Wrote a weekly review.",                   test: function () { return reviews && Object.keys(reviews).length > 0; } },
+    { id: "quarter",  ic: "💎", t: "90 Days",        d: "A full quarter of showing up.",            test: function () { return elapsedDays() >= 90; } }
+  ];
+  function milestonesStoreKey() { return session ? (MILESTONES_KEY + "." + session.user.id) : MILESTONES_KEY; }
+  function loadMilestones() {
+    var k = milestonesStoreKey();
+    try { var o = JSON.parse(localStorage.getItem(k)); if (o && typeof o === "object") { earnedMs = o; earnedMsTs = (+localStorage.getItem(k + ".ts")) || 0; return; } } catch (e) {}
+    earnedMs = {}; earnedMsTs = 0;
+  }
+  function persistMilestones() { var k = milestonesStoreKey(); localStorage.setItem(k, JSON.stringify(earnedMs)); localStorage.setItem(k + ".ts", String(earnedMsTs)); }
+  function saveMilestones() { earnedMsTs = Date.now(); persistMilestones(); pushMilestones(); }
+  function pushMilestones() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert({ user_id: session.user.id, milestones: earnedMs, milestones_updated_at: new Date(earnedMsTs || Date.now()).toISOString() }, { onConflict: "user_id" }).then(function () {}, function () {});
+  }
+  function syncMilestones() {
+    if (!sb || !session) return;
+    sb.from("user_settings").select("milestones,milestones_updated_at").eq("user_id", session.user.id).maybeSingle().then(function (res) {
+      if (res.error) return;
+      var r = res.data, rts = (r && r.milestones_updated_at) ? Date.parse(r.milestones_updated_at) : 0;
+      if (r && r.milestones && typeof r.milestones === "object" && rts > earnedMsTs) { earnedMs = r.milestones; earnedMsTs = rts; persistMilestones(); renderMilestones(); }
+      else if (earnedMsTs > rts && Object.keys(earnedMs).length) { pushMilestones(); }
+    }, function () {});
+  }
+  function onAuthMilestones() { loadMilestones(); if (session) syncMilestones(); }
+  loadMilestones();
+  function checkMilestones() {
+    var initKey = milestonesStoreKey() + ".init", initialized = false;
+    try { initialized = localStorage.getItem(initKey) === "1"; } catch (e) {}
+    var newly = [];
+    MILESTONES.forEach(function (m) {
+      if (earnedMs[m.id]) return;
+      var ok = false; try { ok = !!m.test(); } catch (e) {}
+      if (ok) { earnedMs[m.id] = Date.now(); if (initialized) newly.push(m); }
+    });
+    if (!initialized) { // adopt whatever's already true, silently — no retroactive toast storm
+      try { localStorage.setItem(initKey, "1"); } catch (e) {}
+      if (Object.keys(earnedMs).length) saveMilestones();
+      return;
+    }
+    if (newly.length) {
+      saveMilestones();
+      if (navigator.vibrate) { try { navigator.vibrate(20); } catch (e) {} }
+      showToast(newly.length === 1 ? (newly[0].ic + " Milestone: " + newly[0].t) : ("🏅 " + newly.length + " milestones unlocked!"));
+      renderMilestones();
+    }
+  }
+  function renderMilestones() {
+    var host = document.getElementById("milestones");
+    if (!host) return;
+    var earnedCount = MILESTONES.filter(function (m) { return earnedMs[m.id]; }).length;
+    host.className = "sched" + (milestonesOpen ? " open" : "");
+    var now = '<div class="sched-now" data-msact><span class="rew-emoji">🏅</span><span class="lbl">Milestones</span>' +
+      '<span class="hist-sum">' + earnedCount + " / " + MILESTONES.length + '</span><span class="chev">▾</span></div>';
+    var body = "";
+    if (milestonesOpen) {
+      var grid = MILESTONES.map(function (m) {
+        var e = earnedMs[m.id];
+        return '<div class="ms-badge' + (e ? " on" : "") + '">' +
+          '<div class="ms-ic">' + m.ic + '</div><div class="ms-t">' + escapeHtml(m.t) + '</div>' +
+          '<div class="ms-d">' + escapeHtml(m.d) + '</div>' +
+          (e ? '<div class="ms-when">Earned ' + daysAgoLabel(ymd(new Date(e))) + '</div>' : '<div class="ms-lock">🔒 Locked</div>') +
+          '</div>';
+      }).join("");
+      body = '<div class="sched-body"><div class="ms-grid">' + grid + '</div></div>';
+    }
+    host.innerHTML = now + body;
+  }
+  document.getElementById("milestones").addEventListener("click", function (ev) {
+    if (ev.target.closest("[data-msact]")) { milestonesOpen = !milestonesOpen; renderMilestones(); }
+  });
+
+  // ======================= Week in Review (auto recap of the last completed week) =======================
+  // On the first visits of a new week, a dismissible card recaps last week — points,
+  // best day, weakest link, and the change vs the week before. The reflection payoff.
+  var WIR_KEY = "compounder.wirSeen";
+  function wirStoreKey() { return session ? (WIR_KEY + "." + session.user.id) : WIR_KEY; }
+  function wirSeen() { try { return localStorage.getItem(wirStoreKey()); } catch (e) { return null; } }
+  function wirDismiss(mondayKey) { try { localStorage.setItem(wirStoreKey(), mondayKey); } catch (e) {} renderWeekReview(); }
+  function weekWeakestDim(monday) {
+    var best = null;
+    DOMAINS.forEach(function (dom) {
+      var hit = 0; for (var i = 0; i < 7; i++) if (domDone(dayEntry(ymd(addDays(monday, i))), dom.key)) hit++;
+      if (!best || hit < best.hit) best = { name: dom.name, hit: hit };
+    });
+    return best;
+  }
+  function weekBestDay(monday) {
+    var best = null;
+    for (var i = 0; i < 7; i++) { var k = ymd(addDays(monday, i)); var p = dayPoints(k); if (!best || p > best.p) best = { k: k, p: p }; }
+    return best;
+  }
+  function renderWeekReview() {
+    var host = document.getElementById("weekReview");
+    if (!host) return;
+    host.innerHTML = "";
+    var earliest = earliestDayKey();
+    if (!earliest) return;
+    var lastMon = addDays(thisMonday, -7);
+    if (lastMon < mondayOf(parseKey(earliest))) return;      // no full prior week yet
+    var lastKey = ymd(lastMon);
+    var pts = weekPoints(lastMon);
+    if (pts <= 0) return;                                     // nothing to recap
+    if (wirSeen() === lastKey) return;                        // already acknowledged
+    var moved = 0; for (var i = 0; i < 7; i++) if (dayPoints(ymd(addDays(lastMon, i))) >= 1) moved++;
+    var best = weekBestDay(lastMon);
+    var weak = weekWeakestDim(lastMon);
+    var prev = weekPoints(addDays(lastMon, -7));
+    var delta = pts - prev;
+    var hitTarget = pts >= TARGET;
+    var line = hitTarget
+      ? "You hit the 25 target — that's a strong week banked."
+      : (delta > 0 ? "Up from the week before. The trend is your friend — keep it." : "A quieter week. One needle-moved day at a time; begin again.");
+    var deltaChip = prev > 0 ? '<span class="wir-delta ' + (delta >= 0 ? "up" : "down") + '">' + (delta >= 0 ? "▲ +" : "▼ ") + delta + " vs prior</span>" : "";
+    host.innerHTML =
+      '<div class="wir-head"><span class="wir-title">📖 Last week in review</span>' +
+        '<button class="wir-x" data-wirdismiss="' + lastKey + '" title="Dismiss">×</button></div>' +
+      '<div class="wir-stats">' +
+        '<div class="wir-stat"><b>' + pts + '</b><span>/ 35 points</span></div>' +
+        '<div class="wir-stat"><b>' + moved + '</b><span>days moved</span></div>' +
+        '<div class="wir-stat"><b>' + best.p + '</b><span>best day (' + DAYS[parseKey(best.k).getDay()] + ')</span></div>' +
+        '<div class="wir-stat"><b>' + escapeHtml(weak.name) + '</b><span>weak link</span></div>' +
+      '</div>' +
+      '<div class="wir-foot">' + line + " " + deltaChip + '</div>';
+  }
+  document.getElementById("weekReview").addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-wirdismiss]");
+    if (b) wirDismiss(b.getAttribute("data-wirdismiss"));
+  });
+
   // ======================= Tips per dimension (editable, synced) =======================
   // A modal of "ideal state" bullets for each pillar, seeded from popular sources
   // and fully editable. The aim: follow these to maximize that area with the least
@@ -3455,6 +3652,9 @@
     syncOverviewOpen(); // keep panel open-state in sync with the active Overview tab
     renderScore();
     renderTodayHero();
+    renderWeekReview();
+    checkMilestones();
+    renderMilestones();
     renderDaySwitch();
     if (!anyEditorFocused()) renderCards(); // don't steal focus while a note/why is being typed
     renderToday();
@@ -3905,6 +4105,7 @@
     onAuthReviews();  // reload + reconcile weekly reviews
     onAuthGoals();    // reload + reconcile goals
     onAuthMetrics();  // reload + reconcile health metrics
+    onAuthMilestones(); // reload + reconcile earned milestones
     onAuthTips();     // reload + reconcile per-dimension tips
     loadReminderPrefs();
     if (session) {
