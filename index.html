@@ -669,40 +669,15 @@
   /* Overview group — one collapsible wrapper around Schedule, Rewards, Goals, and
      This Week, so the supporting context folds away from the daily pillars. The
      inner blocks keep their own look and independent collapsing. */
-  .toolgroup { margin-bottom: 18px; }
-  .toolgroup.open { margin-bottom: 0; }
-  .toolgroup-bar {
-    width: 100%; display: flex; align-items: flex-start; gap: 10px;
-    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    box-shadow: var(--shadow); color: var(--text); font: inherit; text-align: left;
-    padding: 13px 16px; cursor: pointer;
-  }
-  .toolgroup-bar:hover { border-color: #33404f; }
-  .tg-icon { font-size: 15px; flex: 0 0 auto; line-height: 1.5; }
-  .tg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  .tg-top { display: flex; align-items: baseline; gap: 10px; }
-  .tg-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
-  .tg-sum { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* Pillars + week summary, shown directly under the headline */
+  .head-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: -6px 0 18px; }
+  .head-status .head-sum { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
   /* Pillar completion at a glance — filled chip = done, outline = pending */
-  .tg-pillars { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 1px; }
+  .tg-pillars { display: flex; flex-wrap: wrap; gap: 5px; }
   .tg-pill { font-size: 10.5px; line-height: 1; padding: 4px 8px 4px 7px; border-radius: 999px; border: 1px solid var(--pc); display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
   .tg-pill.done { background: var(--pc); color: #0e1116; font-weight: 700; }
   .tg-pill.pending { background: transparent; color: var(--pc); opacity: .68; }
   .tg-pill-check { font-size: 9px; font-weight: 700; }
-  .toolgroup.open .tg-pillars { display: none; }
-  /* Current schedule block + what to do now — shown on the tile only when collapsed */
-  .tg-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px; font-size: 12px; line-height: 1.35; }
-  .tg-now:empty { display: none; }
-  .toolgroup.open .tg-now { display: none; }
-  .tg-now-time { color: var(--accent); font-weight: 700; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
-  .tg-now-label { color: var(--text); font-weight: 600; }
-  .tg-todo { color: var(--muted); width: 100%; }
-  .tg-todo.focus { color: var(--accent); font-weight: 600; }
-  .toolgroup-bar .chev { color: var(--faint); font-size: 11px; margin-left: 10px; transition: transform .2s ease; flex: 0 0 auto; line-height: 1.7; }
-  .toolgroup.open .toolgroup-bar { margin-bottom: 16px; }
-  .toolgroup.open .toolgroup-bar .chev { transform: rotate(180deg); }
-  .toolgroup-body { display: none; }
-  .toolgroup.open .toolgroup-body { display: block; }
 
   /* Tips icon on each pillar header + the tips modal */
   .card-tips { flex: 0 0 auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 4px; margin-left: 6px; opacity: .85; }
@@ -886,6 +861,11 @@
     <div class="tagline">Five points a day. Target is 25 a week — not 35. That number is the whole system.</div>
   </header>
 
+  <div class="head-status">
+    <div class="tg-pillars" id="toolgroupPillars"></div>
+    <span class="head-sum" id="toolgroupSum"></span>
+  </div>
+
   <blockquote class="creed">
     <div class="creed-text">
       <p>Once more into the fray. Into the last good fight I'll ever know.</p>
@@ -903,32 +883,20 @@
 
   <section class="wir" id="weekReview"></section>
 
-  <section class="otd" id="onThisDay"></section>
-
-  <section class="toolgroup" id="toolgroup">
-    <button class="toolgroup-bar" id="toolgroupBar" aria-expanded="false">
-      <span class="tg-icon">🗂️</span>
-      <div class="tg-main">
-        <div class="tg-top"><span class="tg-title">Overview</span><span class="tg-sum" id="toolgroupSum"></span></div>
-        <div class="tg-pillars" id="toolgroupPillars"></div>
-      </div>
-      <span class="chev">▾</span>
-    </button>
-    <div class="toolgroup-body">
-      <section class="week">
-        <div class="week-top">
-          <span class="week-label" id="weekLabel">This week <span class="week-streak" id="weekStreak"></span></span>
-          <span class="week-num"><b id="weekPts">0</b><span class="poss"> / <span class="target" id="weekTargetLbl">25 target</span> · <span id="weekPossLbl">35 possible</span></span></span>
-        </div>
-        <div class="track">
-          <div class="fill" id="weekFill" style="width:0%"></div>
-          <div class="goal" id="weekGoal"></div>
-        </div>
-        <div class="week-foot" id="weekFoot"></div>
-        <div class="week-rew" id="weekRew"></div>
-      </section>
+  <section class="week">
+    <div class="week-top">
+      <span class="week-label" id="weekLabel">This week <span class="week-streak" id="weekStreak"></span></span>
+      <span class="week-num"><b id="weekPts">0</b><span class="poss"> / <span class="target" id="weekTargetLbl">25 target</span> · <span id="weekPossLbl">35 possible</span></span></span>
     </div>
+    <div class="track">
+      <div class="fill" id="weekFill" style="width:0%"></div>
+      <div class="goal" id="weekGoal"></div>
+    </div>
+    <div class="week-foot" id="weekFoot"></div>
+    <div class="week-rew" id="weekRew"></div>
   </section>
+
+  <section class="otd" id="onThisDay"></section>
 
   <div class="dayswitch">
     <button class="daynav" id="dayPrev" aria-label="Previous day">◀</button>
@@ -1624,23 +1592,6 @@
           : '<div class="week-rew-foot">Earn points, then spend them in Rewards — nothing saved yet.</div>');
     }
   }
-
-  // ---- Overview group: one collapsible wrapper; remembers its state, collapsed by default ----
-  var toolsOpen = false;
-  try { toolsOpen = localStorage.getItem("compounder.toolsOpen") === "1"; } catch (e) {}
-  function renderToolgroup() {
-    var el = document.getElementById("toolgroup");
-    if (!el) return;
-    el.classList.toggle("open", toolsOpen);
-    var bar = document.getElementById("toolgroupBar");
-    if (bar) bar.setAttribute("aria-expanded", toolsOpen ? "true" : "false");
-  }
-  document.getElementById("toolgroupBar").addEventListener("click", function () {
-    toolsOpen = !toolsOpen;
-    try { localStorage.setItem("compounder.toolsOpen", toolsOpen ? "1" : "0"); } catch (e) {}
-    renderToolgroup();
-  });
-  renderToolgroup();
 
   // ---- Overview sections as a sticky bottom tab bar + bottom sheet ----
   // Schedule / Rewards / Goals / Metrics live in a fixed bottom bar; tapping a tab slides
