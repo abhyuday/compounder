@@ -242,9 +242,13 @@
   .j-tool b { font-weight: 800; } .j-tool i { font-style: italic; }
   .j-toolsep { width: 1px; background: var(--border); margin: 3px 2px; }
   .j-toolbar .j-tool-preview { margin-left: auto; color: var(--accent); font-weight: 700; }
-  .j-body { width: 100%; min-height: 46vh; background: var(--panel); border: 1px solid var(--border); border-radius: 0 0 10px 10px; color: var(--text); font-size: 15px; line-height: 1.65; padding: 14px; outline: none; resize: vertical; font-family: inherit; }
+  .j-body { width: 100%; min-height: 46vh; background: var(--panel); border: 1px solid var(--border); border-radius: 0 0 10px 10px; color: var(--text); font-size: 15px; line-height: 1.65; padding: 14px 16px; outline: none; font-family: inherit; cursor: text; }
   .j-body:focus { border-color: var(--accent); }
-  .j-preview { min-height: 46vh; background: var(--panel); border: 1px solid var(--border); border-radius: 0 0 10px 10px; padding: 14px 16px; }
+  .j-body:empty:before { content: attr(data-placeholder); color: var(--faint); pointer-events: none; }
+  .j-body .j-todo { display: flex; align-items: baseline; gap: 8px; margin: 5px 0; }
+  .j-body .j-todo.done { color: var(--faint); text-decoration: line-through; }
+  .j-cb { cursor: pointer; user-select: none; -webkit-user-select: none; color: var(--accent); flex: 0 0 auto; }
+  .j-body a.j-ilink { cursor: pointer; }
   .j-backlinks { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
   .j-backlinks-h { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); font-weight: 700; margin-bottom: 8px; }
   .j-backlink { display: inline-block; font-size: 13px; color: var(--accent); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; margin: 0 6px 6px 0; cursor: pointer; }
@@ -3155,7 +3159,8 @@
     for (var i = 0; i < journal.length; i++) if (journal[i].id === id) { journal[i].deleted = true; journal[i].updated_at = Date.now(); upsertLocal(journal[i]); pushEntry(journal[i]); break; }
     jView = "list"; renderJournal(); renderOverviewTabs();
   }
-  function openEntry(id) { jEntryId = id; jView = "editor"; jPreview = false; renderJournal(); }
+  function jFlushBody() { var e = jCurrentEntry(), ta = document.getElementById("jBody"); if (e && ta) { e.body = ta.innerHTML; e.updated_at = Date.now(); upsertLocal(e); pushEntry(e); } }
+  function openEntry(id) { jFlushBody(); jEntryId = id; jView = "editor"; jPreview = false; renderJournal(); }
 
   // ---- markdown ----
   function jDecodeEntities(s) { return String(s).replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'"); }
@@ -3195,37 +3200,77 @@
   }
   function jBacklinks(entry) {
     if (!entry.title) return [];
-    var t = entry.title.trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    var re = new RegExp("\\[\\[\\s*" + t + "\\s*\\]\\]", "i");
-    return journal.filter(function (o) { return !o.deleted && o.id !== entry.id && re.test(o.body || ""); });
+    var t = entry.title.trim().toLowerCase();
+    return journal.filter(function (o) {
+      if (o.deleted || o.id === entry.id) return false;
+      var re = /data-jlink="([^"]*)"/g, m;
+      while ((m = re.exec(o.body || ""))) { if (jDecodeEntities(m[1]).trim().toLowerCase() === t) return true; }
+      return false;
+    });
   }
 
   // ---- dates ----
   function jAgo(ts) { var d = Date.now() - ts, m = Math.floor(d / 60000); if (m < 1) return "just now"; if (m < 60) return m + "m ago"; var h = Math.floor(m / 60); if (h < 24) return h + "h ago"; var days = Math.floor(h / 24); if (days < 7) return days + "d ago"; var dt = new Date(ts); return MONTHS[dt.getMonth()] + " " + dt.getDate(); }
   function jDateLabel(ts) { var dt = new Date(ts); return MONTHS[dt.getMonth()] + " " + dt.getDate() + ", " + dt.getFullYear(); }
 
-  // ---- editor toolbar ----
-  function jOnBodyInput() { var e = jCurrentEntry(), ta = document.getElementById("jBody"); if (!e || !ta) return; e.body = ta.value; e.updated_at = Date.now(); upsertLocal(e); schedulePush(e); }
+  // ---- WYSIWYG editor (contenteditable) ----
+  function jBodyEl() { return document.getElementById("jBody"); }
+  function jOnBodyInput() { var e = jCurrentEntry(), ta = jBodyEl(); if (!e || !ta) return; e.body = ta.innerHTML; e.updated_at = Date.now(); upsertLocal(e); schedulePush(e); }
   function jOnTitleInput() { var e = jCurrentEntry(), ti = document.getElementById("jTitle"); if (!e || !ti) return; e.title = ti.value; e.updated_at = Date.now(); upsertLocal(e); schedulePush(e); }
-  function jWrap(before, after) { var ta = document.getElementById("jBody"); if (!ta) return; var s = ta.selectionStart, en = ta.selectionEnd, v = ta.value, sel = v.slice(s, en); ta.value = v.slice(0, s) + before + sel + after + v.slice(en); ta.focus(); var pos = s + before.length + sel.length; ta.setSelectionRange(pos, pos); jOnBodyInput(); }
-  function jLinePrefix(pfx) { var ta = document.getElementById("jBody"); if (!ta) return; var s = ta.selectionStart, v = ta.value, ls = v.lastIndexOf("\n", s - 1) + 1; ta.value = v.slice(0, ls) + pfx + v.slice(ls); ta.focus(); ta.setSelectionRange(s + pfx.length, s + pfx.length); jOnBodyInput(); }
-  function jLink() { var ta = document.getElementById("jBody"); if (!ta) return; var url = window.prompt("Link URL (https://…)"); if (!url) return; if (!/^https?:\/\//i.test(url)) url = "https://" + url; var s = ta.selectionStart, en = ta.selectionEnd, v = ta.value, sel = v.slice(s, en) || "link", md = "[" + sel + "](" + url + ")"; ta.value = v.slice(0, s) + md + v.slice(en); ta.focus(); var pos = s + md.length; ta.setSelectionRange(pos, pos); jOnBodyInput(); }
-  function jTool(name) {
-    if (name === "bold") jWrap("**", "**");
-    else if (name === "italic") jWrap("*", "*");
-    else if (name === "code") jWrap("`", "`");
-    else if (name === "h2") jLinePrefix("## ");
-    else if (name === "h3") jLinePrefix("### ");
-    else if (name === "ul") jLinePrefix("- ");
-    else if (name === "check") jLinePrefix("- [ ] ");
-    else if (name === "quote") jLinePrefix("> ");
-    else if (name === "link") jLink();
-    else if (name === "ilink") jWrap("[[", "]]");
+  function jExec(cmd, val) { var ta = jBodyEl(); if (!ta) return; ta.focus(); try { document.execCommand(cmd, false, val || null); } catch (e) {} jOnBodyInput(); }
+  function jBlock(tag) { var ta = jBodyEl(); if (!ta) return; ta.focus(); var cur = (document.queryCommandValue("formatBlock") || "").toLowerCase(); try { document.execCommand("formatBlock", false, cur === tag.toLowerCase() ? "<p>" : "<" + tag + ">"); } catch (e) {} jOnBodyInput(); }
+  function jInsertNode(node) {
+    var ta = jBodyEl(); if (!ta) return; ta.focus();
+    var sel = window.getSelection();
+    if (!sel.rangeCount) { ta.appendChild(node); return; }
+    var r = sel.getRangeAt(0);
+    if (!ta.contains(r.commonAncestorContainer)) { ta.appendChild(node); return; }
+    r.deleteContents(); r.insertNode(node); r.setStartAfter(node); r.collapse(true); sel.removeAllRanges(); sel.addRange(r);
   }
+  function jInlineCode() { var sel = window.getSelection(); if (!sel.rangeCount || sel.isCollapsed) return; var r = sel.getRangeAt(0), node = document.createElement("code"); try { r.surroundContents(node); } catch (e) { node.appendChild(r.extractContents()); r.insertNode(node); } jOnBodyInput(); }
+  function jExecLink() {
+    var url = window.prompt("Link URL (https://…)"); if (!url) return; if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    var ta = jBodyEl(); ta.focus();
+    var sel = window.getSelection();
+    if (sel.rangeCount && !sel.isCollapsed) { try { document.execCommand("createLink", false, url); } catch (e) {} }
+    else { var a = document.createElement("a"); a.href = url; a.textContent = url; jInsertNode(a); }
+    Array.prototype.forEach.call(ta.querySelectorAll("a[href]:not([data-jlink])"), function (a) { a.target = "_blank"; a.rel = "noopener noreferrer"; });
+    jOnBodyInput();
+  }
+  function jInsertInternalLink() {
+    var title = window.prompt("Link to which entry? (title)"); if (!title) return; title = title.trim(); if (!title) return;
+    var exists = jEntryByTitle(title);
+    var a = document.createElement("a");
+    a.className = "j-ilink" + (exists ? "" : " missing");
+    a.setAttribute("data-jlink", title); a.setAttribute("contenteditable", "false"); a.textContent = title;
+    jInsertNode(a); jInsertNode(document.createTextNode(" ")); jOnBodyInput();
+  }
+  function jInsertCheck() {
+    var d = document.createElement("div"); d.className = "j-todo";
+    var cb = document.createElement("span"); cb.className = "j-cb"; cb.setAttribute("contenteditable", "false"); cb.setAttribute("data-jcb", ""); cb.textContent = "☐";
+    d.appendChild(cb); d.appendChild(document.createTextNode(" "));
+    jInsertNode(d);
+    var sel = window.getSelection(), r = document.createRange(); r.selectNodeContents(d); r.collapse(false); sel.removeAllRanges(); sel.addRange(r);
+    jOnBodyInput();
+  }
+  function jTool(name) {
+    if (name === "bold") jExec("bold");
+    else if (name === "italic") jExec("italic");
+    else if (name === "code") jInlineCode();
+    else if (name === "h2") jBlock("h2");
+    else if (name === "h3") jBlock("h3");
+    else if (name === "ul") jExec("insertUnorderedList");
+    else if (name === "ol") jExec("insertOrderedList");
+    else if (name === "quote") jBlock("blockquote");
+    else if (name === "check") jInsertCheck();
+    else if (name === "link") jExecLink();
+    else if (name === "ilink") jInsertInternalLink();
+  }
+  function jLooksLikeHtml(s) { return /<[a-z][\s\S]*>/i.test(s || ""); }
 
   // ---- render ----
   function jItemHtml(e) {
-    var snip = (e.body || "").replace(/```[\s\S]*?```/g, "").replace(/[#>*`\[\]]/g, "").replace(/\n+/g, " ").trim();
+    var snip = jDecodeEntities((e.body || "").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
     return '<div class="j-item" data-jopen="' + e.id + '">' +
       '<div class="j-item-top">' + (e.pinned ? '<span class="j-item-pin">📌</span>' : "") +
         '<span class="j-item-title">' + escapeHtml(e.title || "Untitled") + '</span>' +
@@ -3237,7 +3282,7 @@
     var q = jSearch.trim().toLowerCase();
     return journal.filter(function (e) { return !e.deleted; })
       .filter(function (e) { return jTopic === "All" || e.topic === jTopic; })
-      .filter(function (e) { return !q || ((e.title || "") + " " + (e.body || "")).toLowerCase().indexOf(q) >= 0; })
+      .filter(function (e) { return !q || ((e.title || "") + " " + (e.body || "").replace(/<[^>]+>/g, " ")).toLowerCase().indexOf(q) >= 0; })
       .sort(function (a, b) { var p = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0); return p || (b.updated_at - a.updated_at); });
   }
   function jRenderList(host) {
@@ -3283,21 +3328,27 @@
           '<span class="j-toolsep"></span>' +
           '<button class="j-tool" data-jtool="h2">H2</button>' +
           '<button class="j-tool" data-jtool="h3">H3</button>' +
-          '<button class="j-tool" data-jtool="ul">•</button>' +
-          '<button class="j-tool" data-jtool="check">☑</button>' +
+          '<button class="j-tool" data-jtool="ul" title="Bullet list">•</button>' +
+          '<button class="j-tool" data-jtool="ol" title="Numbered list">1.</button>' +
+          '<button class="j-tool" data-jtool="check" title="Checklist item">☑</button>' +
           '<button class="j-tool" data-jtool="quote">❝</button>' +
           '<button class="j-tool" data-jtool="code">‹›</button>' +
           '<span class="j-toolsep"></span>' +
-          '<button class="j-tool" data-jtool="link">🔗</button>' +
-          '<button class="j-tool" data-jtool="ilink" title="Link to another entry">[[ ]]</button>' +
-          '<button class="j-tool j-tool-preview" data-jpreview>' + (jPreview ? "Edit" : "Preview") + "</button></div>" +
-        (jPreview
-          ? '<div class="j-preview j-md">' + (e.body ? jMdToHtml(e.body) : '<p style="color:var(--faint)">Nothing to preview yet.</p>') + "</div>"
-          : '<textarea class="j-body" id="jBody" placeholder="Write…  **bold**, *italic*, - lists, > quotes, [text](url), and [[link to another entry]].">' + escapeHtml(e.body) + "</textarea>") +
+          '<button class="j-tool" data-jtool="link" title="Insert link">🔗</button>' +
+          '<button class="j-tool" data-jtool="ilink" title="Link to another entry">[[ ]]</button></div>' +
+        '<div class="j-body j-md" id="jBody" contenteditable="true" data-placeholder="Write freely…">' +
+          (jLooksLikeHtml(e.body) ? e.body : (e.body ? jMdToHtml(e.body) : "")) + "</div>" +
         (backs.length ? '<div class="j-backlinks"><div class="j-backlinks-h">Linked from</div>' + backs.map(function (o) { return '<span class="j-backlink" data-jopen="' + o.id + '">' + escapeHtml(o.title || "Untitled") + "</span>"; }).join("") + "</div>" : "") +
       "</div>";
     var ti = document.getElementById("jTitle"); if (ti) { ti.addEventListener("input", jOnTitleInput); ti.addEventListener("blur", function () { pushEntry(jCurrentEntry()); }); }
-    var ta = document.getElementById("jBody"); if (ta) { ta.addEventListener("input", jOnBodyInput); ta.addEventListener("blur", function () { pushEntry(jCurrentEntry()); }); }
+    var ta = document.getElementById("jBody");
+    if (ta) {
+      ta.addEventListener("input", jOnBodyInput);
+      ta.addEventListener("blur", function () { pushEntry(jCurrentEntry()); });
+      ta.addEventListener("paste", function (ev) { ev.preventDefault(); var txt = (ev.clipboardData || window.clipboardData).getData("text/plain"); document.execCommand("insertText", false, txt); });
+      // Refresh internal-link resolved/missing styling against the current set of entries.
+      Array.prototype.forEach.call(ta.querySelectorAll("a.j-ilink"), function (a) { a.classList.toggle("missing", !jEntryByTitle(a.getAttribute("data-jlink"))); });
+    }
     var ts = document.getElementById("jTopicSel"); if (ts) ts.addEventListener("change", function () { var e2 = jCurrentEntry(); if (e2) { e2.topic = ts.value; e2.updated_at = Date.now(); upsertLocal(e2); pushEntry(e2); } });
   }
   function jRenderGate(host) {
@@ -3317,21 +3368,21 @@
     else { jView = "list"; jRenderList(host); }
   }
   function openJournal() { journalOpen = true; document.body.style.overflow = "hidden"; renderJournal(); renderOverviewTabs(); }
-  function closeJournal() { var e = jCurrentEntry(); if (e) pushEntry(e); journalOpen = false; jView = "list"; jPreview = false; document.body.style.overflow = ""; renderJournal(); renderOverviewTabs(); }
+  function closeJournal() { jFlushBody(); journalOpen = false; jView = "list"; jPreview = false; document.body.style.overflow = ""; renderJournal(); renderOverviewTabs(); }
   document.getElementById("journalOverlay").addEventListener("click", function (ev) {
     var t = ev.target, el;
+    if ((el = t.closest("[data-jcb]"))) { var on = el.textContent.trim() !== "☑"; el.textContent = on ? "☑" : "☐"; var td = el.closest(".j-todo"); if (td) td.classList.toggle("done", on); jOnBodyInput(); return; }
     if (t.closest("[data-jclose]")) { closeJournal(); return; }
     if (t.closest("[data-jsignin]")) { closeJournal(); pillEl.click(); return; }
     if ((el = t.closest("[data-jtool]"))) { jTool(el.getAttribute("data-jtool")); return; }
+    if ((el = t.closest("[data-jlink]"))) { jFlushBody(); var title = el.getAttribute("data-jlink"); var found = jEntryByTitle(title); if (found) openEntry(found.id); else { var cur = jCurrentEntry(); var ne = newEntry(cur ? cur.topic : "Journal"); ne.title = title; ne.updated_at = Date.now(); upsertLocal(ne); pushEntry(ne); openEntry(ne.id); } return; }
     if ((el = t.closest("[data-jopen]"))) { openEntry(el.getAttribute("data-jopen")); return; }
     if ((el = t.closest("[data-jtopic]"))) { jTopic = el.getAttribute("data-jtopic"); jRenderList(document.getElementById("journalOverlay")); return; }
     if (t.closest("[data-jnew]")) { newEntry(jTopic !== "All" ? jTopic : "Journal"); return; }
-    if (t.closest("[data-jback]")) { var eb = jCurrentEntry(); if (eb) pushEntry(eb); jView = "list"; renderJournal(); renderOverviewTabs(); return; }
-    if (t.closest("[data-jpreview]")) { jPreview = !jPreview; renderJournal(); return; }
-    if (t.closest("[data-jpin]")) { var ep = jCurrentEntry(); if (ep) { ep.pinned = !ep.pinned; ep.updated_at = Date.now(); upsertLocal(ep); pushEntry(ep); renderJournal(); } return; }
+    if (t.closest("[data-jback]")) { jFlushBody(); jView = "list"; renderJournal(); renderOverviewTabs(); return; }
+    if (t.closest("[data-jpin]")) { jFlushBody(); var ep = jCurrentEntry(); if (ep) { ep.pinned = !ep.pinned; ep.updated_at = Date.now(); upsertLocal(ep); pushEntry(ep); renderJournal(); } return; }
     if (t.closest("[data-jdelete]")) { var ed = jCurrentEntry(); if (ed && confirm("Delete this entry? This can't be undone.")) deleteEntry(ed.id); return; }
     if (t.closest("[data-jnewtopic]")) { var n = window.prompt("New topic name"); if (n && n.trim()) { var en = jCurrentEntry(); if (en) { en.topic = n.trim(); en.updated_at = Date.now(); upsertLocal(en); pushEntry(en); renderJournal(); } } return; }
-    if ((el = t.closest("[data-jlink]"))) { var title = el.getAttribute("data-jlink"); var found = jEntryByTitle(title); if (found) openEntry(found.id); else { var cur = jCurrentEntry(); var ne = newEntry(cur ? cur.topic : "Journal"); ne.title = title; ne.updated_at = Date.now(); upsertLocal(ne); pushEntry(ne); openEntry(ne.id); } return; }
   });
 
   // ======================= Tips per dimension (editable, synced) =======================
