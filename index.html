@@ -196,6 +196,75 @@
   .ovpanel { margin-bottom: 0; }
   .ovpanel.hidden { display: none; }
   .ovpanel > .sched-now { display: none; }
+
+  /* ===== Journal: a full-screen, account-only writing space ===== */
+  .journal-overlay { position: fixed; inset: 0; z-index: 400; display: none; background: var(--bg);
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); }
+  .journal-overlay.open { display: block; }
+  .j-wrap { max-width: 720px; margin: 0 auto; }
+  .j-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; position: sticky; top: 0; background: var(--bg); padding: 6px 0 10px; z-index: 3; }
+  .j-title { font-size: 18px; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 8px; }
+  .j-top .j-spacer { margin-left: auto; }
+  .j-iconbtn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 9px; width: 36px; height: 36px; font-size: 16px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .j-iconbtn:hover { color: var(--text); border-color: #33404f; }
+  .j-iconbtn.on { color: var(--accent); border-color: var(--accent); }
+  .j-primary { background: var(--accent); color: #241a04; border: none; border-radius: 9px; padding: 9px 14px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .j-search { width: 100%; background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; margin-bottom: 12px; }
+  .j-search:focus { border-color: var(--accent); }
+  .j-topics { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; -webkit-overflow-scrolling: touch; }
+  .j-topic { flex: 0 0 auto; background: var(--panel); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 7px 13px; font-size: 12.5px; cursor: pointer; white-space: nowrap; font-weight: 600; }
+  .j-topic.on { background: var(--panel-2); border-color: var(--accent); color: var(--accent); }
+  .j-topic-add { color: var(--faint); }
+  .j-list { display: flex; flex-direction: column; gap: 9px; }
+  .j-item { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; cursor: pointer; }
+  .j-item:hover { border-color: #33404f; }
+  .j-item-top { display: flex; align-items: baseline; gap: 8px; }
+  .j-item-title { font-size: 15px; font-weight: 700; color: var(--text); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .j-item-pin { color: var(--accent); font-size: 12px; flex: 0 0 auto; }
+  .j-item-date { font-size: 11px; color: var(--faint); flex: 0 0 auto; }
+  .j-item-snip { font-size: 13px; color: var(--muted); margin-top: 5px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .j-item-topic { display: inline-block; font-size: 10.5px; color: var(--faint); margin-top: 7px; text-transform: uppercase; letter-spacing: .05em; }
+  .j-empty { text-align: center; color: var(--faint); font-size: 14px; padding: 40px 20px; line-height: 1.6; }
+  .j-gate { text-align: center; padding: 60px 24px; }
+  .j-gate-ic { font-size: 40px; }
+  .j-gate h2 { font-size: 20px; color: var(--text); margin: 16px 0 8px; }
+  .j-gate p { font-size: 14px; color: var(--muted); line-height: 1.6; margin: 0 auto 20px; max-width: 320px; }
+
+  /* Editor */
+  .j-titlein { width: 100%; background: none; border: none; color: var(--text); font-size: 21px; font-weight: 800; outline: none; padding: 4px 0; margin-bottom: 6px; font-family: inherit; }
+  .j-titlein::placeholder { color: var(--faint); }
+  .j-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--faint); margin-bottom: 12px; }
+  .j-topicsel { background: var(--panel); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-family: inherit; outline: none; cursor: pointer; }
+  .j-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 7px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px 10px 0 0; border-bottom: none; }
+  .j-tool { background: none; border: none; color: var(--muted); border-radius: 7px; min-width: 30px; height: 30px; padding: 0 7px; font-size: 13.5px; cursor: pointer; font-family: inherit; }
+  .j-tool:hover { background: var(--panel-2); color: var(--text); }
+  .j-tool b { font-weight: 800; } .j-tool i { font-style: italic; }
+  .j-toolsep { width: 1px; background: var(--border); margin: 3px 2px; }
+  .j-toolbar .j-tool-preview { margin-left: auto; color: var(--accent); font-weight: 700; }
+  .j-body { width: 100%; min-height: 46vh; background: var(--panel); border: 1px solid var(--border); border-radius: 0 0 10px 10px; color: var(--text); font-size: 15px; line-height: 1.65; padding: 14px; outline: none; resize: vertical; font-family: inherit; }
+  .j-body:focus { border-color: var(--accent); }
+  .j-preview { min-height: 46vh; background: var(--panel); border: 1px solid var(--border); border-radius: 0 0 10px 10px; padding: 14px 16px; }
+  .j-backlinks { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .j-backlinks-h { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); font-weight: 700; margin-bottom: 8px; }
+  .j-backlink { display: inline-block; font-size: 13px; color: var(--accent); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; margin: 0 6px 6px 0; cursor: pointer; }
+
+  /* Rendered markdown */
+  .j-md { color: var(--text); font-size: 15px; line-height: 1.7; }
+  .j-md h1, .j-md h2, .j-md h3 { color: var(--text); line-height: 1.3; margin: 18px 0 8px; }
+  .j-md h1 { font-size: 22px; } .j-md h2 { font-size: 18px; } .j-md h3 { font-size: 15.5px; }
+  .j-md p { margin: 9px 0; }
+  .j-md ul, .j-md ol { margin: 9px 0; padding-left: 22px; }
+  .j-md li { margin: 4px 0; }
+  .j-md li.j-check { list-style: none; margin-left: -18px; }
+  .j-md a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+  .j-md a.j-ilink { text-decoration: none; border-bottom: 1px dashed var(--accent); }
+  .j-md a.j-ilink.missing { color: var(--faint); border-bottom-color: var(--faint); }
+  .j-md blockquote { border-left: 3px solid var(--border); margin: 10px 0; padding: 2px 0 2px 14px; color: var(--muted); }
+  .j-md code { background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; font-size: 13px; font-family: var(--mono, ui-monospace, monospace); }
+  .j-md pre { background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: 12px; overflow-x: auto; margin: 10px 0; }
+  .j-md pre code { background: none; border: none; padding: 0; }
+  .j-md hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
   .week-streak { color: var(--accent); font-weight: 600; text-transform: none; letter-spacing: 0; }
 
   /* Focus "start here" marker + celebration toast */
@@ -948,6 +1017,8 @@
 </div>
 <nav class="ov-bar" id="ovBar" aria-label="Overview sections"></nav>
 
+<div class="journal-overlay" id="journalOverlay" aria-label="Journal"></div>
+
 <div class="modal-backdrop" id="tipsModal"></div>
 <div class="modal-backdrop" id="metricModal"></div>
 <div class="modal-backdrop" id="ytModal"></div>
@@ -1640,10 +1711,12 @@
       { key: "sched",   ic: "🗓️", tl: "Schedule", bd: schedBd }, // now: time · what to do
       { key: "rewards", ic: "🎁", tl: "Rewards",  bd: walletBalance() + " saved" },
       { key: "goals",   ic: "🎯", tl: "Goals",    bd: activeGoals ? (activeGoals + " active") : "none" },
-      { key: "metrics", ic: "⚖️", tl: "Metrics",  bd: mLast ? (fmtMetric(pm, mLast.value) + " " + pm.unit) : "—" }
+      { key: "metrics", ic: "⚖️", tl: "Metrics",  bd: mLast ? (fmtMetric(pm, mLast.value) + " " + pm.unit) : "—" },
+      { key: "journal", ic: "📓", tl: "Journal",  bd: session ? (jEntryCount() + (jEntryCount() === 1 ? " note" : " notes")) : "sign in" }
     ];
     host.innerHTML = tabs.map(function (t) {
-      return '<button class="ov-tab' + (overviewTab === t.key ? " on" : "") + '" data-ovtab="' + t.key + '">' +
+      var on = (t.key === "journal") ? journalOpen : (overviewTab === t.key);
+      return '<button class="ov-tab' + (on ? " on" : "") + '" data-ovtab="' + t.key + '">' +
         '<span class="ov-ic">' + t.ic + '</span>' +
         '<span class="ov-tl">' + t.tl + '</span>' +
         '<span class="ov-bd">' + escapeHtml(t.bd || "") + '</span></button>';
@@ -1651,7 +1724,9 @@
   }
   document.getElementById("ovBar").addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest("[data-ovtab]");
-    if (b) setOverviewTab(b.getAttribute("data-ovtab"));
+    if (!b) return;
+    var k = b.getAttribute("data-ovtab");
+    if (k === "journal") openJournal(); else setOverviewTab(k);
   });
   document.getElementById("ovSheetBackdrop").addEventListener("click", function (ev) {
     if (ev.target.id === "ovSheetBackdrop" || (ev.target.closest && ev.target.closest("[data-ovclose]"))) closeOverviewSheet();
@@ -3022,6 +3097,243 @@
       : "";
   }
 
+  // ======================= Journal (account-only; full-screen; topics + markdown) =======================
+  // A private writing space, gated to signed-in accounts and synced via its own
+  // journal_entries table (RLS). Entries carry a topic, a markdown body, timestamps, and
+  // pin/soft-delete flags. Local cache is per-user; sync is last-write-wins per entry id.
+  var JOURNAL_KEY = "compounder.journal";
+  var journal = [];
+  var journalOpen = false, jView = "list", jEntryId = null, jTopic = "All", jSearch = "", jPreview = false, jPushTimer = null;
+  function journalStoreKey() { return session ? (JOURNAL_KEY + "." + session.user.id) : JOURNAL_KEY; }
+  function loadJournal() {
+    journal = [];
+    if (!session) return; // account-only
+    try { var a = JSON.parse(localStorage.getItem(journalStoreKey())); if (Array.isArray(a)) journal = a; } catch (e) {}
+  }
+  function persistJournal() { if (!session) return; try { localStorage.setItem(journalStoreKey(), JSON.stringify(journal)); } catch (e) {} }
+  function jUid() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10)); }
+  function upsertLocal(e) { var i = -1; for (var k = 0; k < journal.length; k++) if (journal[k].id === e.id) { i = k; break; } if (i >= 0) journal[i] = e; else journal.push(e); persistJournal(); }
+  function jCurrentEntry() { for (var i = 0; i < journal.length; i++) if (journal[i].id === jEntryId && !journal[i].deleted) return journal[i]; return null; }
+  function jEntryByTitle(t) { var tl = String(t || "").trim().toLowerCase(); if (!tl) return null; for (var i = 0; i < journal.length; i++) { var e = journal[i]; if (!e.deleted && (e.title || "").trim().toLowerCase() === tl) return e; } return null; }
+  function journalTopics() { var s = {}; journal.forEach(function (e) { if (!e.deleted && e.topic) s[e.topic] = 1; }); return Object.keys(s).sort(); }
+  function jEntryCount() { return journal.filter(function (e) { return !e.deleted; }).length; }
+
+  function normalizeRow(r) { return { id: r.id, topic: r.topic || "Journal", title: r.title || "", body: r.body || "", pinned: !!r.pinned, deleted: !!r.deleted, created_at: Date.parse(r.created_at) || Date.now(), updated_at: Date.parse(r.updated_at) || Date.now() }; }
+  function entryToRow(e) { return { id: e.id, user_id: session.user.id, topic: e.topic, title: e.title, body: e.body, pinned: !!e.pinned, deleted: !!e.deleted, created_at: new Date(e.created_at).toISOString(), updated_at: new Date(e.updated_at).toISOString() }; }
+  function pushEntry(e) { if (!sb || !session || !e) return; sb.from("journal_entries").upsert([entryToRow(e)], { onConflict: "id" }).then(function () {}, function () {}); }
+  function pushEntries(list) { if (!sb || !session || !list.length) return; sb.from("journal_entries").upsert(list.map(entryToRow), { onConflict: "id" }).then(function () {}, function () {}); }
+  function schedulePush(e) { clearTimeout(jPushTimer); jPushTimer = setTimeout(function () { pushEntry(e); }, 1200); }
+  function syncJournal() {
+    if (!sb || !session) return;
+    sb.from("journal_entries").select("*").eq("user_id", session.user.id).then(function (res) {
+      if (res.error) return; // table may not exist yet — local-only
+      var rows = res.data || [];
+      var byId = {}; journal.forEach(function (e) { byId[e.id] = e; });
+      var serverTs = {};
+      rows.forEach(function (r) { serverTs[r.id] = Date.parse(r.updated_at) || 0; var e = normalizeRow(r); var cur = byId[e.id]; if (!cur || e.updated_at >= cur.updated_at) byId[e.id] = e; });
+      var toPush = [];
+      Object.keys(byId).forEach(function (id) { var e = byId[id]; if (serverTs[id] == null || e.updated_at > serverTs[id]) toPush.push(e); });
+      journal = Object.keys(byId).map(function (id) { return byId[id]; });
+      persistJournal();
+      if (toPush.length) pushEntries(toPush);
+      if (journalOpen) renderJournal();
+      renderOverviewTabs();
+    }, function () {});
+  }
+  function onAuthJournal() { loadJournal(); if (session) syncJournal(); if (journalOpen) renderJournal(); }
+  loadJournal();
+
+  function newEntry(topic) {
+    var now = Date.now();
+    var e = { id: jUid(), topic: topic || "Journal", title: "", body: "", pinned: false, deleted: false, created_at: now, updated_at: now };
+    journal.push(e); persistJournal(); pushEntry(e);
+    jEntryId = e.id; jView = "editor"; jPreview = false; renderJournal();
+    setTimeout(function () { var ti = document.getElementById("jTitle"); if (ti) ti.focus(); }, 30);
+    return e;
+  }
+  function deleteEntry(id) {
+    for (var i = 0; i < journal.length; i++) if (journal[i].id === id) { journal[i].deleted = true; journal[i].updated_at = Date.now(); upsertLocal(journal[i]); pushEntry(journal[i]); break; }
+    jView = "list"; renderJournal(); renderOverviewTabs();
+  }
+  function openEntry(id) { jEntryId = id; jView = "editor"; jPreview = false; renderJournal(); }
+
+  // ---- markdown ----
+  function jDecodeEntities(s) { return String(s).replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'"); }
+  function jInline(s) {
+    s = escapeHtml(s);
+    s = s.replace(/`([^`]+)`/g, function (_, c) { return "<code>" + c + "</code>"; });
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, t, u) { return '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + t + "</a>"; });
+    s = s.replace(/\[\[([^\]]+)\]\]/g, function (_, t) { var raw = jDecodeEntities(t.trim()); var exists = jEntryByTitle(raw); return '<a class="j-ilink' + (exists ? "" : " missing") + '" data-jlink="' + t.trim() + '">' + t.trim() + "</a>"; });
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+    s = s.replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, "$1<i>$2</i>");
+    return s;
+  }
+  function jMdToHtml(text) {
+    var lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+    var html = "", inList = false, listType = "", inCode = false, codeBuf = [];
+    function closeList() { if (inList) { html += (listType === "ol" ? "</ol>" : "</ul>"); inList = false; listType = ""; } }
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i];
+      if (/^```/.test(ln)) { if (!inCode) { closeList(); inCode = true; codeBuf = []; } else { inCode = false; html += "<pre><code>" + escapeHtml(codeBuf.join("\n")) + "</code></pre>"; } continue; }
+      if (inCode) { codeBuf.push(ln); continue; }
+      if (/^\s*$/.test(ln)) { closeList(); continue; }
+      if (/^\s*---+\s*$/.test(ln)) { closeList(); html += "<hr>"; continue; }
+      var h = ln.match(/^(#{1,3})\s+(.*)$/);
+      if (h) { closeList(); html += "<h" + h[1].length + ">" + jInline(h[2]) + "</h" + h[1].length + ">"; continue; }
+      if (/^>\s?/.test(ln)) { closeList(); html += "<blockquote>" + jInline(ln.replace(/^>\s?/, "")) + "</blockquote>"; continue; }
+      var cb = ln.match(/^\s*[-*]\s+\[([ xX])\]\s+(.*)$/);
+      if (cb) { if (!inList || listType !== "ul") { closeList(); html += "<ul>"; inList = true; listType = "ul"; } html += '<li class="j-check">' + (cb[1].toLowerCase() === "x" ? "☑" : "☐") + " " + jInline(cb[2]) + "</li>"; continue; }
+      var ul = ln.match(/^\s*[-*]\s+(.*)$/);
+      if (ul) { if (!inList || listType !== "ul") { closeList(); html += "<ul>"; inList = true; listType = "ul"; } html += "<li>" + jInline(ul[1]) + "</li>"; continue; }
+      var ol = ln.match(/^\s*\d+\.\s+(.*)$/);
+      if (ol) { if (!inList || listType !== "ol") { closeList(); html += "<ol>"; inList = true; listType = "ol"; } html += "<li>" + jInline(ol[1]) + "</li>"; continue; }
+      closeList(); html += "<p>" + jInline(ln) + "</p>";
+    }
+    if (inCode) html += "<pre><code>" + escapeHtml(codeBuf.join("\n")) + "</code></pre>";
+    closeList();
+    return html;
+  }
+  function jBacklinks(entry) {
+    if (!entry.title) return [];
+    var t = entry.title.trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    var re = new RegExp("\\[\\[\\s*" + t + "\\s*\\]\\]", "i");
+    return journal.filter(function (o) { return !o.deleted && o.id !== entry.id && re.test(o.body || ""); });
+  }
+
+  // ---- dates ----
+  function jAgo(ts) { var d = Date.now() - ts, m = Math.floor(d / 60000); if (m < 1) return "just now"; if (m < 60) return m + "m ago"; var h = Math.floor(m / 60); if (h < 24) return h + "h ago"; var days = Math.floor(h / 24); if (days < 7) return days + "d ago"; var dt = new Date(ts); return MONTHS[dt.getMonth()] + " " + dt.getDate(); }
+  function jDateLabel(ts) { var dt = new Date(ts); return MONTHS[dt.getMonth()] + " " + dt.getDate() + ", " + dt.getFullYear(); }
+
+  // ---- editor toolbar ----
+  function jOnBodyInput() { var e = jCurrentEntry(), ta = document.getElementById("jBody"); if (!e || !ta) return; e.body = ta.value; e.updated_at = Date.now(); upsertLocal(e); schedulePush(e); }
+  function jOnTitleInput() { var e = jCurrentEntry(), ti = document.getElementById("jTitle"); if (!e || !ti) return; e.title = ti.value; e.updated_at = Date.now(); upsertLocal(e); schedulePush(e); }
+  function jWrap(before, after) { var ta = document.getElementById("jBody"); if (!ta) return; var s = ta.selectionStart, en = ta.selectionEnd, v = ta.value, sel = v.slice(s, en); ta.value = v.slice(0, s) + before + sel + after + v.slice(en); ta.focus(); var pos = s + before.length + sel.length; ta.setSelectionRange(pos, pos); jOnBodyInput(); }
+  function jLinePrefix(pfx) { var ta = document.getElementById("jBody"); if (!ta) return; var s = ta.selectionStart, v = ta.value, ls = v.lastIndexOf("\n", s - 1) + 1; ta.value = v.slice(0, ls) + pfx + v.slice(ls); ta.focus(); ta.setSelectionRange(s + pfx.length, s + pfx.length); jOnBodyInput(); }
+  function jLink() { var ta = document.getElementById("jBody"); if (!ta) return; var url = window.prompt("Link URL (https://…)"); if (!url) return; if (!/^https?:\/\//i.test(url)) url = "https://" + url; var s = ta.selectionStart, en = ta.selectionEnd, v = ta.value, sel = v.slice(s, en) || "link", md = "[" + sel + "](" + url + ")"; ta.value = v.slice(0, s) + md + v.slice(en); ta.focus(); var pos = s + md.length; ta.setSelectionRange(pos, pos); jOnBodyInput(); }
+  function jTool(name) {
+    if (name === "bold") jWrap("**", "**");
+    else if (name === "italic") jWrap("*", "*");
+    else if (name === "code") jWrap("`", "`");
+    else if (name === "h2") jLinePrefix("## ");
+    else if (name === "h3") jLinePrefix("### ");
+    else if (name === "ul") jLinePrefix("- ");
+    else if (name === "check") jLinePrefix("- [ ] ");
+    else if (name === "quote") jLinePrefix("> ");
+    else if (name === "link") jLink();
+    else if (name === "ilink") jWrap("[[", "]]");
+  }
+
+  // ---- render ----
+  function jItemHtml(e) {
+    var snip = (e.body || "").replace(/```[\s\S]*?```/g, "").replace(/[#>*`\[\]]/g, "").replace(/\n+/g, " ").trim();
+    return '<div class="j-item" data-jopen="' + e.id + '">' +
+      '<div class="j-item-top">' + (e.pinned ? '<span class="j-item-pin">📌</span>' : "") +
+        '<span class="j-item-title">' + escapeHtml(e.title || "Untitled") + '</span>' +
+        '<span class="j-item-date">' + jAgo(e.updated_at) + "</span></div>" +
+      (snip ? '<div class="j-item-snip">' + escapeHtml(snip) + "</div>" : "") +
+      '<span class="j-item-topic">' + escapeHtml(e.topic || "Journal") + "</span></div>";
+  }
+  function jVisibleEntries() {
+    var q = jSearch.trim().toLowerCase();
+    return journal.filter(function (e) { return !e.deleted; })
+      .filter(function (e) { return jTopic === "All" || e.topic === jTopic; })
+      .filter(function (e) { return !q || ((e.title || "") + " " + (e.body || "")).toLowerCase().indexOf(q) >= 0; })
+      .sort(function (a, b) { var p = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0); return p || (b.updated_at - a.updated_at); });
+  }
+  function jRenderList(host) {
+    var chips = ["All"].concat(journalTopics()).map(function (t) { return '<button class="j-topic' + (t === jTopic ? " on" : "") + '" data-jtopic="' + escapeHtml(t) + '">' + escapeHtml(t) + "</button>"; }).join("");
+    var es = jVisibleEntries();
+    var list = es.length ? es.map(jItemHtml).join("") : '<div class="j-empty">' + (jSearch ? "No entries match your search." : "No entries yet.<br>Tap <b>+ New entry</b> to start writing.") + "</div>";
+    host.innerHTML =
+      '<div class="j-wrap">' +
+        '<div class="j-top"><span class="j-title">📓 Journal</span><span class="j-spacer"></span>' +
+          '<button class="j-primary" data-jnew>+ New entry</button>' +
+          '<button class="j-iconbtn" data-jclose title="Close">✕</button></div>' +
+        '<input class="j-search" id="jSearch" placeholder="Search your journal…" value="' + escapeHtml(jSearch) + '">' +
+        '<div class="j-topics">' + chips + "</div>" +
+        '<div class="j-list">' + list + "</div>" +
+      "</div>";
+    var se = document.getElementById("jSearch");
+    if (se) se.addEventListener("input", function () {
+      jSearch = se.value;
+      var lc = host.querySelector(".j-list"); if (!lc) return;
+      var e2 = jVisibleEntries();
+      lc.innerHTML = e2.length ? e2.map(jItemHtml).join("") : '<div class="j-empty">No entries match your search.</div>';
+    });
+  }
+  function jRenderEditor(host) {
+    var e = jCurrentEntry(); if (!e) { jView = "list"; renderJournal(); return; }
+    var topics = journalTopics(); if (topics.indexOf(e.topic) < 0) topics.unshift(e.topic);
+    var opts = topics.map(function (t) { return "<option" + (t === e.topic ? " selected" : "") + ">" + escapeHtml(t) + "</option>"; }).join("");
+    var backs = jBacklinks(e);
+    var edited = (e.updated_at - e.created_at > 60000) ? " · edited " + jAgo(e.updated_at) : "";
+    host.innerHTML =
+      '<div class="j-wrap">' +
+        '<div class="j-top"><button class="j-iconbtn" data-jback title="Back">←</button><span class="j-spacer"></span>' +
+          '<button class="j-iconbtn' + (e.pinned ? " on" : "") + '" data-jpin title="Pin">📌</button>' +
+          '<button class="j-iconbtn" data-jdelete title="Delete">🗑</button></div>' +
+        '<input class="j-titlein" id="jTitle" placeholder="Title" value="' + escapeHtml(e.title) + '">' +
+        '<div class="j-meta">' +
+          '<select class="j-topicsel" id="jTopicSel">' + opts + "</select>" +
+          '<button class="j-iconbtn" data-jnewtopic style="width:auto;height:28px;padding:0 10px;font-size:12px">+ topic</button>' +
+          "<span>" + jDateLabel(e.created_at) + edited + "</span></div>" +
+        '<div class="j-toolbar">' +
+          '<button class="j-tool" data-jtool="bold"><b>B</b></button>' +
+          '<button class="j-tool" data-jtool="italic"><i>I</i></button>' +
+          '<span class="j-toolsep"></span>' +
+          '<button class="j-tool" data-jtool="h2">H2</button>' +
+          '<button class="j-tool" data-jtool="h3">H3</button>' +
+          '<button class="j-tool" data-jtool="ul">•</button>' +
+          '<button class="j-tool" data-jtool="check">☑</button>' +
+          '<button class="j-tool" data-jtool="quote">❝</button>' +
+          '<button class="j-tool" data-jtool="code">‹›</button>' +
+          '<span class="j-toolsep"></span>' +
+          '<button class="j-tool" data-jtool="link">🔗</button>' +
+          '<button class="j-tool" data-jtool="ilink" title="Link to another entry">[[ ]]</button>' +
+          '<button class="j-tool j-tool-preview" data-jpreview>' + (jPreview ? "Edit" : "Preview") + "</button></div>" +
+        (jPreview
+          ? '<div class="j-preview j-md">' + (e.body ? jMdToHtml(e.body) : '<p style="color:var(--faint)">Nothing to preview yet.</p>') + "</div>"
+          : '<textarea class="j-body" id="jBody" placeholder="Write…  **bold**, *italic*, - lists, > quotes, [text](url), and [[link to another entry]].">' + escapeHtml(e.body) + "</textarea>") +
+        (backs.length ? '<div class="j-backlinks"><div class="j-backlinks-h">Linked from</div>' + backs.map(function (o) { return '<span class="j-backlink" data-jopen="' + o.id + '">' + escapeHtml(o.title || "Untitled") + "</span>"; }).join("") + "</div>" : "") +
+      "</div>";
+    var ti = document.getElementById("jTitle"); if (ti) { ti.addEventListener("input", jOnTitleInput); ti.addEventListener("blur", function () { pushEntry(jCurrentEntry()); }); }
+    var ta = document.getElementById("jBody"); if (ta) { ta.addEventListener("input", jOnBodyInput); ta.addEventListener("blur", function () { pushEntry(jCurrentEntry()); }); }
+    var ts = document.getElementById("jTopicSel"); if (ts) ts.addEventListener("change", function () { var e2 = jCurrentEntry(); if (e2) { e2.topic = ts.value; e2.updated_at = Date.now(); upsertLocal(e2); pushEntry(e2); } });
+  }
+  function jRenderGate(host) {
+    host.innerHTML =
+      '<div class="j-wrap"><div class="j-top"><span class="j-title">📓 Journal</span><span class="j-spacer"></span>' +
+        '<button class="j-iconbtn" data-jclose title="Close">✕</button></div>' +
+      '<div class="j-gate"><div class="j-gate-ic">🔒</div><h2>Your private journal</h2>' +
+        "<p>Sign in to unlock a personal, synced space for writing — kept entirely separate from your daily scoring.</p>" +
+        '<button class="j-primary" data-jsignin>Sign in</button></div></div>';
+  }
+  function renderJournal() {
+    var host = document.getElementById("journalOverlay"); if (!host) return;
+    host.classList.toggle("open", journalOpen);
+    if (!journalOpen) return;
+    if (!session) { jRenderGate(host); return; }
+    if (jView === "editor" && jCurrentEntry()) jRenderEditor(host);
+    else { jView = "list"; jRenderList(host); }
+  }
+  function openJournal() { journalOpen = true; document.body.style.overflow = "hidden"; renderJournal(); renderOverviewTabs(); }
+  function closeJournal() { var e = jCurrentEntry(); if (e) pushEntry(e); journalOpen = false; jView = "list"; jPreview = false; document.body.style.overflow = ""; renderJournal(); renderOverviewTabs(); }
+  document.getElementById("journalOverlay").addEventListener("click", function (ev) {
+    var t = ev.target, el;
+    if (t.closest("[data-jclose]")) { closeJournal(); return; }
+    if (t.closest("[data-jsignin]")) { closeJournal(); pillEl.click(); return; }
+    if ((el = t.closest("[data-jtool]"))) { jTool(el.getAttribute("data-jtool")); return; }
+    if ((el = t.closest("[data-jopen]"))) { openEntry(el.getAttribute("data-jopen")); return; }
+    if ((el = t.closest("[data-jtopic]"))) { jTopic = el.getAttribute("data-jtopic"); jRenderList(document.getElementById("journalOverlay")); return; }
+    if (t.closest("[data-jnew]")) { newEntry(jTopic !== "All" ? jTopic : "Journal"); return; }
+    if (t.closest("[data-jback]")) { var eb = jCurrentEntry(); if (eb) pushEntry(eb); jView = "list"; renderJournal(); renderOverviewTabs(); return; }
+    if (t.closest("[data-jpreview]")) { jPreview = !jPreview; renderJournal(); return; }
+    if (t.closest("[data-jpin]")) { var ep = jCurrentEntry(); if (ep) { ep.pinned = !ep.pinned; ep.updated_at = Date.now(); upsertLocal(ep); pushEntry(ep); renderJournal(); } return; }
+    if (t.closest("[data-jdelete]")) { var ed = jCurrentEntry(); if (ed && confirm("Delete this entry? This can't be undone.")) deleteEntry(ed.id); return; }
+    if (t.closest("[data-jnewtopic]")) { var n = window.prompt("New topic name"); if (n && n.trim()) { var en = jCurrentEntry(); if (en) { en.topic = n.trim(); en.updated_at = Date.now(); upsertLocal(en); pushEntry(en); renderJournal(); } } return; }
+    if ((el = t.closest("[data-jlink]"))) { var title = el.getAttribute("data-jlink"); var found = jEntryByTitle(title); if (found) openEntry(found.id); else { var cur = jCurrentEntry(); var ne = newEntry(cur ? cur.topic : "Journal"); ne.title = title; ne.updated_at = Date.now(); upsertLocal(ne); pushEntry(ne); openEntry(ne.id); } return; }
+  });
+
   // ======================= Tips per dimension (editable, synced) =======================
   // A modal of "ideal state" bullets for each pillar, seeded from popular sources
   // and fully editable. The aim: follow these to maximize that area with the least
@@ -4121,6 +4433,7 @@
     onAuthGoals();    // reload + reconcile goals
     onAuthMetrics();  // reload + reconcile health metrics
     onAuthMilestones(); // reload + reconcile earned milestones
+    onAuthJournal();  // reload + reconcile the private journal (account-only)
     onAuthTips();     // reload + reconcile per-dimension tips
     loadReminderPrefs();
     if (session) {
