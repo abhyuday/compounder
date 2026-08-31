@@ -1533,20 +1533,11 @@
           (dom.key === "health" ? '<button class="card-metric" data-metricbtn title="Log weight & metrics">⚖️</button>' : "") +
           '<button class="card-collapse" data-collapse="' + dom.key + '" title="Collapse">▴</button>' +
         '</div>' +
-        (multi
-          ? '<div class="chips">' +
-              rows.map(function (r) {
-                return '<button class="chip' + (e[r.key] ? " on" : "") + '" data-sub="' + r.key + '">' + r.name + '</button>';
-              }).join("") +
-            '</div>'
-          : '<div class="subs">' +
-              rows.map(function (r) {
-                return '<div class="sub' + (e[r.key] ? " on" : "") + '" data-sub="' + r.key + '">' +
-                         '<div class="subcheck">' + checkSVG + '</div>' +
-                         '<div class="subtext"><span class="subname">' + dom.word + '</span><span class="subhint">' + r.move + '</span></div>' +
-                       '</div>';
-              }).join("") +
-            '</div>') +
+        '<div class="chips' + (multi ? "" : " single") + '">' +
+          rows.map(function (r) {
+            return '<button class="chip' + (e[r.key] ? " on" : "") + '" data-sub="' + r.key + '">' + (multi ? r.name : dom.word) + '</button>';
+          }).join("") +
+        '</div>' +
         recall + whyAdd +
         '<button class="card-more" data-dsheet="' + dom.key + '">' +
           '<span class="cm-notes">📝 ' + domNoteCount(dom) + '</span><span class="cm-sep">·</span>' +
