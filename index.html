@@ -1004,6 +1004,50 @@
     .card-head::before { width: 42px; height: 42px; font-size: 21px; }
     .domain { font-size: 16px; }
   }
+
+  /* card footer → opens the per-dimension detail sheet (Log + Playbook) */
+  .card-more { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 14px; padding: 10px 12px;
+    background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
+    color: var(--muted); font-family: inherit; font-size: 12px; font-weight: 600; }
+  .card-more:hover { border-color: #33404f; }
+  .card-more .cm-sep { color: var(--faint); }
+  .card-more .cm-play { color: color-mix(in srgb, var(--dc) 78%, var(--muted)); }
+  .card-more .cm-arrow { margin-left: auto; color: var(--faint); font-size: 15px; }
+
+  /* per-dimension detail sheet */
+  .dim-sheet-back { position: fixed; inset: 0; z-index: 320; display: none;
+    background: rgba(6,8,12,.66); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+  .dim-sheet-back.open { display: block; }
+  .dim-sheet { --c: var(--accent); position: fixed; left: 0; right: 0; bottom: 0; max-width: 680px; margin: 0 auto;
+    max-height: 88vh; display: flex; flex-direction: column; background: var(--bg);
+    border-top: 3px solid var(--c); border-radius: 22px 22px 0 0; box-shadow: 0 -18px 50px rgba(0,0,0,.6);
+    animation: dsUp .28s cubic-bezier(.2,.9,.2,1); }
+  @keyframes dsUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .ds-grip { width: 40px; height: 4px; border-radius: 3px; background: var(--line-2, #33404f); margin: 10px auto 4px; flex: 0 0 auto; }
+  .ds-head { display: flex; align-items: center; gap: 13px; padding: 8px 18px 14px; flex: 0 0 auto; }
+  .ds-med { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 23px; flex: 0 0 auto;
+    background: color-mix(in srgb, var(--c) 16%, #0e131a); border: 1px solid color-mix(in srgb, var(--c) 42%, transparent); }
+  .ds-h-body { flex: 1; min-width: 0; }
+  .ds-title { font-family: var(--disp); font-weight: 800; font-size: 19px; letter-spacing: -.01em; }
+  .ds-sub { font-size: 12.5px; margin-top: 2px; }
+  .ds-x { margin-left: auto; width: 34px; height: 34px; border-radius: 50%; background: var(--panel); border: 1px solid var(--border);
+    color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
+  .ds-x:hover { color: var(--text); }
+  .ds-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 18px calc(24px + env(safe-area-inset-bottom)); }
+  .ds-seclabel { font-family: var(--disp); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin: 16px 0 10px; }
+  .ds-seclabel.play { color: color-mix(in srgb, var(--c) 70%, var(--faint)); margin-top: 24px; }
+  .ds-item { display: flex; gap: 12px; padding: 13px 0; border-top: 1px solid var(--border); }
+  .ds-item:first-of-type { border-top: none; }
+  .ds-check { width: 28px; height: 28px; border-radius: 9px; flex: 0 0 auto; border: 2px solid var(--line-2, #33404f); background: var(--panel-2);
+    display: grid; place-items: center; cursor: pointer; transition: all .18s ease; }
+  .ds-check[disabled] { cursor: default; opacity: .5; }
+  .ds-check svg { width: 15px; height: 15px; stroke: #0c0f14; stroke-width: 3.2; fill: none; opacity: 0; transform: scale(.6); transition: all .18s ease; }
+  .ds-check.on { background: var(--c); border-color: var(--c); }
+  .ds-check.on svg { opacity: 1; transform: scale(1); }
+  .ds-body { flex: 1; min-width: 0; }
+  .ds-name { font-size: 15px; font-weight: 700; color: var(--text); }
+  .ds-hint { font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.45; }
+  .ds-body .notewrap { margin-top: 9px; padding-left: 0; }
 </style>
 </head>
 <body>
@@ -1107,6 +1151,8 @@
 <nav class="ov-bar" id="ovBar" aria-label="Overview sections"></nav>
 
 <div class="journal-overlay" id="journalOverlay" aria-label="Journal"></div>
+
+<div class="dim-sheet-back" id="dimSheetBack"><div class="dim-sheet" id="dimSheet"></div></div>
 
 <div class="modal-backdrop" id="tipsModal"></div>
 <div class="modal-backdrop" id="metricModal"></div>
@@ -1473,7 +1519,6 @@
             (startHere ? ' <span class="start-here">start here</span>' : "") + '</div>' + whyHtml + '</div>' +
           '<div class="status' + (perfect ? " perfect" : "") + '">' + status + '</div>' +
           (dom.key === "health" ? '<button class="card-metric" data-metricbtn title="Log weight & metrics">⚖️</button>' : "") +
-          '<button class="card-tips" data-tips="' + dom.key + '" title="Tips — the ideal to reach for">💡</button>' +
           '<button class="card-collapse" data-collapse="' + dom.key + '" title="Collapse">▴</button>' +
         '</div>' +
         '<div class="subs">' +
@@ -1483,11 +1528,15 @@
               : '<span class="subname">' + dom.word + '</span><span class="subhint">' + r.move + '</span>';
             return '<div class="sub' + (e[r.key] ? " on" : "") + '" data-sub="' + r.key + '">' +
                      '<div class="subcheck">' + checkSVG + '</div>' +
-                     '<div class="subtext">' + text + noteZone(r.key, e) + '</div>' +
+                     '<div class="subtext">' + text + '</div>' +
                    '</div>';
           }).join("") +
         '</div>' +
-        recall + whyAdd;
+        recall + whyAdd +
+        '<button class="card-more" data-dsheet="' + dom.key + '">' +
+          '<span class="cm-notes">📝 ' + domNoteCount(dom) + '</span><span class="cm-sep">·</span>' +
+          '<span class="cm-play">💡 Playbook</span><span class="cm-arrow">›</span>' +
+        '</button>';
       Array.prototype.forEach.call(card.querySelectorAll(".sub"), function (el) {
         el.addEventListener("click", function (ev) {
           if (ev.target.closest(".notewrap")) return; // taps in the note area don't toggle
@@ -1514,8 +1563,8 @@
       function collapseThisCard() { collapsedCards[dom.key] = true; delete expandedCards[dom.key]; renderCards(); }
       var cbtn = card.querySelector("[data-collapse]");
       if (cbtn) cbtn.addEventListener("click", function (ev) { ev.stopPropagation(); collapseThisCard(); });
-      var tbtn = card.querySelector("[data-tips]");
-      if (tbtn) tbtn.addEventListener("click", function (ev) { ev.stopPropagation(); tipsOpenDom = dom.key; tipEditing = null; renderTips(); });
+      var dbtn = card.querySelector("[data-dsheet]");
+      if (dbtn) dbtn.addEventListener("click", function (ev) { ev.stopPropagation(); openDimSheet(dom.key); });
       var mbtn = card.querySelector("[data-metricbtn]");
       if (mbtn) mbtn.addEventListener("click", function (ev) { ev.stopPropagation(); openMetricLog("weight"); });
       var head = card.querySelector(".card-head");
@@ -1543,10 +1592,93 @@
     renderCards();
   }
 
+  // ---- Per-dimension detail sheet: "Log" (notes) + "Playbook" (tips) ----
+  // Opened from a card's footer. Reuses the note data (e.notes) and tip data (tips[key])
+  // and their save paths; a card just shows the compact toggles, the depth lives here.
+  var dimSheetKey = null;
+  var DIM_GLYPH = { hard: "🔥", money: "📈", health: "🫀", family: "🫂", self: "🧭" };
+  var DIM_COLOR = { hard: "var(--comfort)", money: "var(--money)", health: "var(--health)", family: "var(--family)", self: "var(--self)" };
+  function domByKey(key) { for (var i = 0; i < DOMAINS.length; i++) if (DOMAINS[i].key === key) return DOMAINS[i]; return null; }
+  function domNoteCount(dom) {
+    var e = dayEntry(selectedKey);
+    var keys = dom.subs ? dom.subs.map(function (s) { return s.key; }) : [dom.key];
+    return keys.reduce(function (n, k) { return n + notesArr(e, k).filter(function (x) { return x.text.trim(); }).length; }, 0);
+  }
+  function openDimSheet(key) { dimSheetKey = key; tipEditing = null; noteEditing = null; renderDimSheet(); }
+  function closeDimSheet() { dimSheetKey = null; tipEditing = null; noteEditing = null; document.body.style.overflow = ""; document.getElementById("dimSheetBack").classList.remove("open"); renderCards(); }
+  function renderDimSheet() {
+    var back = document.getElementById("dimSheetBack"), sheet = document.getElementById("dimSheet");
+    if (!back || !sheet) return;
+    if (!dimSheetKey) { back.classList.remove("open"); document.body.style.overflow = ""; return; }
+    var dom = domByKey(dimSheetKey); if (!dom) { closeDimSheet(); return; }
+    var e = dayEntry(selectedKey);
+    var multi = !!dom.subs;
+    var rows = multi ? dom.subs : [{ key: dom.key }];
+    var done = domDone(e, dom.key);
+    var editable = dayEditable(selectedKey);
+    var col = DIM_COLOR[dom.key];
+    var logHtml = rows.map(function (r) {
+      var on = multi ? !!e[r.key] : !!e[dom.key];
+      var nm = multi ? r.name : dom.word;
+      var ht = multi ? r.hint : dom.move;
+      return '<div class="ds-item">' +
+        '<button class="ds-check' + (on ? " on" : "") + '" data-sub="' + r.key + '"' + (editable ? "" : " disabled") + ">" + checkSVG + "</button>" +
+        '<div class="ds-body"><div class="ds-name">' + nm + '</div><div class="ds-hint">' + ht + "</div>" + noteZone(r.key, e) + "</div></div>";
+    }).join("");
+    var list = getTips(dom.key);
+    var bullets = list.map(function (t, i) {
+      var id = dom.key + ":" + i;
+      if (tipEditing === id) return '<div class="tip-item"><span class="tip-dot" style="color:' + col + '">•</span><textarea class="tip-in" data-tipinput="' + id + '" rows="1">' + escapeHtml(t) + "</textarea></div>";
+      return '<div class="tip-item"><span class="tip-dot" style="color:' + col + '">•</span><span class="tip-text" data-tipedit="' + id + '">' + escapeHtml(t) + '</span><button class="tip-del" data-tipdel="' + id + '" title="Remove">×</button></div>';
+    }).join("");
+    sheet.style.setProperty("--c", col); sheet.style.setProperty("--dc", col);
+    sheet.innerHTML =
+      '<div class="ds-grip"></div>' +
+      '<div class="ds-head"><div class="ds-med">' + DIM_GLYPH[dom.key] + "</div>" +
+        '<div class="ds-h-body"><div class="ds-title">' + dom.name + "</div>" +
+          '<div class="ds-sub" style="color:' + (done ? col : "var(--faint)") + '">' + (done ? "✓ earned today" : (dom.scored || "")) + "</div></div>" +
+        '<button class="ds-x" data-dsclose title="Close">×</button></div>' +
+      '<div class="ds-scroll">' +
+        '<div class="ds-seclabel">Log · what you actually did</div>' + logHtml +
+        '<div class="ds-seclabel play">💡 Playbook · the ideal to reach for</div>' +
+        '<div class="tips-list">' + (bullets || '<div class="tips-empty">No playbook yet — add your own.</div>') + "</div>" +
+        '<button class="tips-add" data-tipadd="' + dom.key + '">+ add to playbook</button>' +
+      "</div>";
+    back.classList.add("open");
+    document.body.style.overflow = "hidden";
+    // focus the tip textarea if one is being edited
+    var ta = sheet.querySelector("[data-tipinput]");
+    if (ta) {
+      var grow = function () { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+      grow(); ta.addEventListener("input", grow);
+      ta.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") { ev.preventDefault(); tipCommitAndAdd(ta.getAttribute("data-tipinput"), ta.value); }
+        else if (ev.key === "Escape") { tipCommit(ta.getAttribute("data-tipinput"), ta.value); }
+      });
+      ta.addEventListener("blur", function () { var id = ta.getAttribute("data-tipinput"); if (tipEditing === id) tipCommit(id, ta.value); });
+      ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+  }
+  (function () {
+    var back = document.getElementById("dimSheetBack"); if (!back) return;
+    bindNotes(back); // reuse the note input/save wiring for the Log section
+    back.addEventListener("click", function (ev) {
+      if (ev.target === back || (ev.target.closest && ev.target.closest("[data-dsclose]"))) { closeDimSheet(); return; }
+      if (noteHandleClick(ev)) return; // note add/done/del/open
+      var sub = ev.target.closest && ev.target.closest("[data-sub]");
+      if (sub) { setDomain(selectedKey, sub.getAttribute("data-sub")); return; }
+      var el;
+      if ((el = ev.target.closest && ev.target.closest("[data-tipadd]"))) { tipAdd(el.getAttribute("data-tipadd")); return; }
+      if ((el = ev.target.closest && ev.target.closest("[data-tipdel]"))) { tipDelete(el.getAttribute("data-tipdel")); return; }
+      if ((el = ev.target.closest && ev.target.closest("[data-tipedit]"))) { tipEditing = el.getAttribute("data-tipedit"); renderDimSheet(); return; }
+    });
+    document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && dimSheetKey && !tipEditing && !noteEditing) closeDimSheet(); });
+  })();
+
   // Note editing state + interactions. id = "key:index". Handlers are shared by
   // the cards (#cards) and the bookend (#bookend).
   var noteEditing = null;
-  function renderNotes() { renderCards(); }
+  function renderNotes() { renderCards(); if (dimSheetKey) renderDimSheet(); }
   function openNoteId(id) {
     noteEditing = id;
     renderNotes();
@@ -1641,6 +1773,7 @@
       else { delete expandedCards[dk]; delete collapsedCards[dk]; }
     }
     renderAll();
+    if (dimSheetKey) renderDimSheet(); // keep the open detail sheet in sync
     pushDay(dayKey); // sync this day if signed in
     if (dayKey === todayKey && after > before) celebratePoint();
   }
@@ -3555,10 +3688,11 @@
 
   function getTips(key) { return tips[key] !== undefined ? tips[key] : (DEFAULT_TIPS[key] || []); }
   function mutableTips(key) { var arr = getTips(key).slice(); tips[key] = arr; return arr; }
+  function renderTipSurface() { if (dimSheetKey) renderDimSheet(); else renderTips(); }
   function tipAdd(key) {
     var arr = mutableTips(key); arr.push("");
     tipEditing = key + ":" + (arr.length - 1);
-    saveTips(); renderTips();
+    saveTips(); renderTipSurface();
   }
   function tipCommit(id, val) {
     var p = id.split(":"), key = p[0], idx = +p[1];
@@ -3566,7 +3700,7 @@
     val = (val || "").trim();
     if (val) arr[idx] = val; else arr.splice(idx, 1); // empty removes the bullet
     tipEditing = null;
-    saveTips(); renderTips();
+    saveTips(); renderTipSurface();
   }
   function tipCommitAndAdd(id, val) {
     if (!(val || "").trim()) { tipCommit(id, val); return; }
@@ -3574,12 +3708,12 @@
     var arr = mutableTips(key); arr[idx] = val.trim();
     arr.splice(idx + 1, 0, "");
     tipEditing = key + ":" + (idx + 1);
-    saveTips(); renderTips();
+    saveTips(); renderTipSurface();
   }
   function tipDelete(id) {
     var p = id.split(":"), key = p[0], idx = +p[1];
     var arr = mutableTips(key); arr.splice(idx, 1);
-    saveTips(); renderTips();
+    saveTips(); renderTipSurface();
   }
   function closeTips() {
     tipsOpenDom = null; tipEditing = null;
@@ -3636,7 +3770,7 @@
     if (tipEditing == null) {
       enableReorder(modal.querySelector(".tips-list"), {
         itemSelector: ".tip-item", handleSelector: "[data-drag]",
-        onReorder: function (from, to) { arrMove(mutableTips(tipsOpenDom), from, to); saveTips(); renderTips(); }
+        onReorder: function (from, to) { arrMove(mutableTips(tipsOpenDom), from, to); saveTips(); renderTipSurface(); }
       });
     }
   }
