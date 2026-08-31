@@ -1005,6 +1005,18 @@
     .domain { font-size: 16px; }
   }
 
+  /* multi-dimension sub-toggles as chips (Move / Eat / Sleep) */
+  .chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+  .chip { flex: 1 1 auto; min-width: 92px; text-align: center; padding: 13px 12px; border-radius: 13px;
+    font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; user-select: none;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    transition: transform .12s ease, background .2s ease, color .2s ease, border-color .2s ease; }
+  .chip:hover { border-color: #33404f; }
+  .chip:active { transform: scale(.95); }
+  .chip.on { background: color-mix(in srgb, var(--dc) 20%, #0e131a); border-color: var(--dc); color: #fff; }
+  .chip.on::before { content: "✓ "; color: var(--dc); font-weight: 900; }
+  .cards.locked .chip { cursor: default; }
+
   /* card footer → opens the per-dimension detail sheet (Log + Playbook) */
   .card-more { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 14px; padding: 10px 12px;
     background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
@@ -1521,23 +1533,26 @@
           (dom.key === "health" ? '<button class="card-metric" data-metricbtn title="Log weight & metrics">⚖️</button>' : "") +
           '<button class="card-collapse" data-collapse="' + dom.key + '" title="Collapse">▴</button>' +
         '</div>' +
-        '<div class="subs">' +
-          rows.map(function (r) {
-            var text = multi
-              ? '<span class="subname">' + r.name + '</span><span class="subhint">' + r.hint + '</span>'
-              : '<span class="subname">' + dom.word + '</span><span class="subhint">' + r.move + '</span>';
-            return '<div class="sub' + (e[r.key] ? " on" : "") + '" data-sub="' + r.key + '">' +
-                     '<div class="subcheck">' + checkSVG + '</div>' +
-                     '<div class="subtext">' + text + '</div>' +
-                   '</div>';
-          }).join("") +
-        '</div>' +
+        (multi
+          ? '<div class="chips">' +
+              rows.map(function (r) {
+                return '<button class="chip' + (e[r.key] ? " on" : "") + '" data-sub="' + r.key + '">' + r.name + '</button>';
+              }).join("") +
+            '</div>'
+          : '<div class="subs">' +
+              rows.map(function (r) {
+                return '<div class="sub' + (e[r.key] ? " on" : "") + '" data-sub="' + r.key + '">' +
+                         '<div class="subcheck">' + checkSVG + '</div>' +
+                         '<div class="subtext"><span class="subname">' + dom.word + '</span><span class="subhint">' + r.move + '</span></div>' +
+                       '</div>';
+              }).join("") +
+            '</div>') +
         recall + whyAdd +
         '<button class="card-more" data-dsheet="' + dom.key + '">' +
           '<span class="cm-notes">📝 ' + domNoteCount(dom) + '</span><span class="cm-sep">·</span>' +
           '<span class="cm-play">💡 Playbook</span><span class="cm-arrow">›</span>' +
         '</button>';
-      Array.prototype.forEach.call(card.querySelectorAll(".sub"), function (el) {
+      Array.prototype.forEach.call(card.querySelectorAll("[data-sub]"), function (el) {
         el.addEventListener("click", function (ev) {
           if (ev.target.closest(".notewrap")) return; // taps in the note area don't toggle
           setDomain(selectedKey, el.getAttribute("data-sub"));
