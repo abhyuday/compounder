@@ -944,7 +944,7 @@
       <p>Once more into the fray. Into the last good fight I'll ever know.</p>
       <p class="creed-punch">Live and die on this day. Live and die on this day.</p>
     </div>
-    <button class="creed-play" id="creedPlay" aria-label="Play the creed" title="Play">▶</button>
+    <button class="creed-play" id="creedPlay" aria-label="Play the creed" title="Play" style="display:none">▶</button>
     <audio id="creedAudio" preload="none" src="live-and-die-on-this-day.mp3"></audio>
   </blockquote>
 
@@ -4474,6 +4474,10 @@
 
   function onAuth(newSession) {
     session = newSession || null;
+    // Creed song is for signed-in users only — hide the play button (and stop playback) when signed out.
+    var cp = document.getElementById("creedPlay"), ca = document.getElementById("creedAudio");
+    if (cp) cp.style.display = session ? "" : "none";
+    if (!session && ca) { try { ca.pause(); ca.currentTime = 0; } catch (e) {} }
     data = load(); // reload the board for the now-current scope (this user, or anon)
     onAuthSchedule(); // reload + reconcile the schedule for this account
     onAuthRewards();  // reload + reconcile the rewards catalog for this account
