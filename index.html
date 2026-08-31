@@ -12,6 +12,9 @@
 <link rel="apple-touch-icon" href="icon-180.png" />
 <link rel="icon" type="image/png" href="icon-192.png" />
 <title>Compounder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&display=swap">
 <style>
   :root {
     --bg: #0e1116;
@@ -918,6 +921,88 @@
   @media (display-mode: standalone) {
     /* A touch more breathing room when launched as an installed app */
     body { padding-top: calc(14px + env(safe-area-inset-top)); }
+  }
+
+  /* =====================================================================
+     Widget / game-feel visual layer — bigger, bolder, tile-style board.
+     Additive overrides only (loaded last so they win the cascade); the
+     markup and all logic are untouched. Dark + identity intact.
+     ===================================================================== */
+  :root { --disp: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+  h1 { font-family: var(--disp); font-weight: 900; letter-spacing: .01em; font-size: 25px; }
+
+  /* --- dimension cards → bold widget tiles --- */
+  .cards { gap: 14px; }
+  .card { padding: 18px; border-radius: 20px;
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 28px rgba(0,0,0,.34); }
+  .card::before { display: none; }                    /* drop the thin left accent bar */
+  .card-head { gap: 13px; }
+  .subs-card .card-head { align-items: center; }
+  .card-head::before {                                /* colour medallion + glyph */
+    content: "•"; flex: 0 0 auto; width: 46px; height: 46px; border-radius: 14px;
+    display: grid; place-items: center; font-size: 23px; line-height: 1; align-self: flex-start;
+    background: color-mix(in srgb, var(--dc) 16%, #0e131a);
+    border: 1px solid color-mix(in srgb, var(--dc) 42%, transparent);
+    transition: background .2s ease, border-color .2s ease;
+  }
+  .card[data-domain="hard"]   .card-head::before { content: "🔥"; }
+  .card[data-domain="money"]  .card-head::before { content: "📈"; }
+  .card[data-domain="health"] .card-head::before { content: "🫀"; }
+  .card[data-domain="family"] .card-head::before { content: "🫂"; }
+  .card[data-domain="self"]   .card-head::before { content: "🧭"; }
+  .card.collapsed .card-head::before { width: 36px; height: 36px; font-size: 18px; border-radius: 11px; align-self: center; }
+
+  .domain { font-family: var(--disp); font-size: 17px; font-weight: 800; letter-spacing: -.01em;
+    text-transform: none; color: var(--text); line-height: 1.15; }
+  .status { font-family: var(--disp); font-weight: 700; font-size: 13px; }
+
+  /* completed dimension glows in ITS OWN colour, not uniform green */
+  .card.done { background: linear-gradient(180deg, color-mix(in srgb, var(--dc) 11%, var(--panel)), var(--panel));
+    border-color: color-mix(in srgb, var(--dc) 50%, var(--border));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--dc) 26%, transparent), 0 14px 30px rgba(0,0,0,.4); }
+  .card.done .status { color: var(--dc); }
+  .card.done .check { background: var(--dc); border-color: var(--dc); }
+  .card.done .check svg { stroke: #0c0f14; }
+  .card.done .card-head::before { background: color-mix(in srgb, var(--dc) 26%, #0e131a); border-color: var(--dc); }
+  .card.collapsed.done { opacity: .62; }
+  .mini-check { color: var(--dc); }
+
+  /* sub rows a touch bigger + coloured checks */
+  .subs { gap: 9px; margin-top: 13px; }
+  .subname { font-size: 14.5px; }
+  .subcheck { width: 27px; height: 27px; }
+  .sub.on { background: color-mix(in srgb, var(--dc) 9%, var(--panel-2)); border-color: color-mix(in srgb, var(--dc) 42%, transparent); }
+  .sub.on:hover { border-color: color-mix(in srgb, var(--dc) 55%, transparent); }
+  .sub.on .subcheck { background: var(--dc); border-color: var(--dc); }
+  .sub.on .subcheck svg { stroke: #0c0f14; }
+
+  /* --- Today HUD: bigger number, chunky gold pips --- */
+  .today { margin-top: 24px; font-size: 15px; }
+  #todayScore, #todayMax { font-family: var(--disp); font-weight: 900; }
+  #todayScore { font-size: 22px; }
+  .pips { gap: 8px; }
+  .pip { width: 13px; height: 13px; border-radius: 5px; }
+  .pip.on { background: linear-gradient(180deg, var(--accent), #c8912f); border-color: transparent;
+    box-shadow: 0 0 12px rgba(217,164,65,.5); }
+
+  /* --- hero widgets: display face on the big numbers --- */
+  .sc-num { font-family: var(--disp); font-weight: 900; }
+  .sc-band { font-family: var(--disp); font-weight: 800; }
+  .week-num b, #weekPts { font-family: var(--disp); font-weight: 900; }
+  .th-focus-dom { font-family: var(--disp); font-weight: 800; }
+  .wir-stat b { font-family: var(--disp); font-weight: 900; }
+  .head-sum { font-variant-numeric: tabular-nums; }
+
+  /* --- bottom bar a little bigger/tactile --- */
+  .ov-tab { padding: 8px 3px; }
+  .ov-tab .ov-ic { font-size: 21px; }
+  .ov-tab .ov-tl { font-size: 10.5px; font-weight: 700; }
+
+  @media (max-width: 480px) {
+    .card { padding: 16px; }
+    .card-head::before { width: 42px; height: 42px; font-size: 21px; }
+    .domain { font-size: 16px; }
   }
 </style>
 </head>
