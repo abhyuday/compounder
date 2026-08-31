@@ -889,6 +889,13 @@
   .yt-err { color: #e57373; font-size: 13.5px; line-height: 1.5; padding: 10px 2px; }
   .yt-hint2 { color: var(--faint); font-size: 12px; }
   .yt-summary { padding: 2px 0 4px; }
+  .yt-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 2px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .yt-savej { background: var(--dc, var(--accent)); color: #0e1116; border: none; border-radius: 9px; padding: 9px 15px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .yt-savej:hover { filter: brightness(1.08); }
+  .yt-savej:disabled { opacity: .6; cursor: default; }
+  .yt-saved { color: var(--dc, var(--accent)); font-size: 13px; font-weight: 700; }
+  .yt-openj { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .yt-openj:hover { border-color: #33404f; }
   .yt-h { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--dc, var(--accent)); font-weight: 700; margin: 14px 0 6px; }
   .yt-h:first-child { margin-top: 2px; }
   .yt-p { font-size: 14px; color: var(--text); line-height: 1.55; margin: 6px 0; }
@@ -3795,6 +3802,7 @@
   // ======================= YouTube summarizer (calls the local Python server) =======================
   var YT_FN_URL = SB_URL + "/functions/v1/summarize-video";
   var ytKeys = { aSet: null, aLast4: "", tSet: null, tLast4: "" }; // per-user Anthropic + TranscriptAPI key status
+  var ytLast = null; // { url, summary, videoId } of the last successful summary, for "Save to Journal"
   function ytMdToHtml(md) {
     var lines = String(md || "").split(/\r?\n/), html = "", inList = false;
     function inline(s) { return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); }
@@ -3834,7 +3842,7 @@
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
       .then(function (o) {
-        if (o.ok) { resEl.innerHTML = '<div class="yt-summary">' + ytMdToHtml(o.j.summary) + "</div>"; return; }
+        if (o.ok) { ytLast = { url: url, summary: o.j.summary || "", videoId: o.j.video_id || "" }; ytRenderSummary(); return; }
         var msg = (o.j && o.j.error) || "Something went wrong.";
         resEl.innerHTML = '<div class="yt-err">' + escapeHtml(msg) + "</div>";
         if (/API key in the app/i.test(msg)) { var d = document.querySelector(".yt-keybox"); if (d) d.open = true; }
@@ -3843,6 +3851,43 @@
         resEl.innerHTML = '<div class="yt-err">Couldn’t reach the summarizer.<div class="yt-hint2">' + escapeHtml(String((e && e.message) || e)) + "</div></div>";
       })
       .finally(function () { if (goEl) goEl.disabled = false; });
+  }
+  // Render the summary plus a "Save to Journal" action.
+  function ytRenderSummary() {
+    var resEl = document.getElementById("ytResult"); if (!resEl || !ytLast) return;
+    resEl.innerHTML = '<div class="yt-summary">' + ytMdToHtml(ytLast.summary) + "</div>" +
+      '<div class="yt-actions" id="ytActions">' +
+        '<button class="yt-savej" id="ytSaveJournal">📓 Save to Journal</button>' +
+      "</div>";
+    var b = document.getElementById("ytSaveJournal");
+    if (b) b.addEventListener("click", ytSaveToJournal);
+  }
+  // Save the current summary as a Journal entry, keeping its formatting (markdown → the journal's own HTML).
+  function ytSaveToJournal() {
+    if (!ytLast || !session) return;
+    var btn = document.getElementById("ytSaveJournal");
+    if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+    var vid = ytLast.videoId, summary = ytLast.summary;
+    var watchUrl = vid ? ("https://www.youtube.com/watch?v=" + vid) : ytLast.url;
+    function finish(title) {
+      var now = Date.now();
+      var bodyHtml = jMdToHtml(summary) +
+        '<p><a href="' + escapeHtml(watchUrl) + '" target="_blank" rel="noopener noreferrer">▶ Watch on YouTube</a></p>';
+      var e = { id: jUid(), topic: "Videos", title: title || "Video summary", body: bodyHtml, pinned: false, deleted: false, created_at: now, updated_at: now };
+      upsertLocal(e); pushEntry(e); renderOverviewTabs();
+      var act = document.getElementById("ytActions");
+      if (act) {
+        act.innerHTML = '<span class="yt-saved">✓ Saved to Journal</span>' +
+          '<button class="yt-openj" id="ytOpenJournal">Open ›</button>';
+        var o = document.getElementById("ytOpenJournal");
+        if (o) o.addEventListener("click", function () { closeYt(); openJournal(); openEntry(e.id); });
+      }
+    }
+    // Best-effort real video title from YouTube's public oEmbed endpoint; fall back if it's unavailable.
+    fetch("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent(watchUrl))
+      .then(function (r) { return r.ok ? r.json() : null; }, function () { return null; })
+      .then(function (j) { finish(j && j.title ? String(j.title) : ""); })
+      .catch(function () { finish(""); });
   }
   function ytKeyBoxLabel() {
     return "🔑 API keys — Transcript " + (ytKeys.tSet ? "✓" : "—") + " · Anthropic " + (ytKeys.aSet ? "✓" : "—");
