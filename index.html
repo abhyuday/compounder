@@ -1483,7 +1483,7 @@
     if (locked) {
       var banner = document.createElement("div");
       banner.className = "day-locked";
-      banner.innerHTML = "🔒 <b>Finalized.</b> Days are editable only for today and yesterday.";
+      banner.innerHTML = "🔒 <b>Not yet.</b> Future days can’t be edited until they arrive.";
       cardsEl.appendChild(banner);
     }
     DOMAINS.forEach(function (dom) {
@@ -1767,7 +1767,7 @@
   // Never allows a future day.
   // A day's habits are editable only for the current and previous date; older days
   // (and future) are finalized/locked.
-  function dayEditable(key) { return key === todayKey || key === yesterdayKey; }
+  function dayEditable(key) { return key <= todayKey; } // today + any past date; future stays locked
   function setDomain(dayKey, key) {
     if (!dayEditable(dayKey)) return;
     var before = dayPoints(dayKey);
@@ -3985,18 +3985,20 @@
 
   // ---- reward economy: spend today's earned points; nothing rolls over ----
   function buyReward(idx) {
+    var key = selectedKey; if (!dayEditable(key)) return; // buy on the selected day (today or any past date)
     var r = rewardsCat[idx]; if (!r) return;
     var cost = +r.cost || 0;
     if (walletBalance() < cost) return; // can't afford from the wallet
-    var e = dayEntry(todayKey);
+    var e = dayEntry(key);
     e.rewards = (e.rewards || []).concat([{ label: r.label, cost: cost }]);
-    e.updated_at = Date.now(); data[todayKey] = e; save(data); pushDay(todayKey);
+    e.updated_at = Date.now(); data[key] = e; save(data); pushDay(key);
     renderAll();
   }
   function undoReward(i) {
-    var e = dayEntry(todayKey); if (!e.rewards || !e.rewards[i]) return;
+    var key = selectedKey; if (!dayEditable(key)) return;
+    var e = dayEntry(key); if (!e.rewards || !e.rewards[i]) return;
     e.rewards.splice(i, 1); e.updated_at = Date.now();
-    data[todayKey] = e; save(data); pushDay(todayKey);
+    data[key] = e; save(data); pushDay(key);
     renderAll();
   }
 
@@ -4077,7 +4079,7 @@
   function renderRewards() {
     var host = document.getElementById("rewards");
     host.className = "sched ovpanel" + (rewardsOpen ? " open" : " hidden");
-    var key = selectedKey, isToday = key === todayKey;
+    var key = selectedKey, isToday = key === todayKey, editable = dayEditable(key);
     var earned = dayPoints(key), spent = spentOn(key);
     var wallet = walletBalance(); // running, all-time balance you spend from
     var now = '<div class="sched-now" data-ract="toggle">' +
@@ -4086,7 +4088,7 @@
       '<span class="rew-bal' + (wallet > 0 ? " has" : "") + '">' + wallet + ' saved</span>' +
       '<span class="chev">▾</span></div>';
     var body = "";
-    if (rewardsOpen && rewardsEditing && isToday) {
+    if (rewardsOpen && rewardsEditing && editable) {
       body = '<div class="sched-body">' + rewardsCat.map(function (r, i) {
         return '<div class="blk edit" data-ridx="' + i + '">' +
           '<span class="drag-handle" data-drag title="Drag to reorder">⠿</span>' +
@@ -4102,14 +4104,15 @@
     } else if (rewardsOpen) {
       var tally = isToday
         ? '<div class="rew-tally"><b class="' + (wallet > 0 ? "pos" : "") + '">' + wallet + '</b> saved to spend · <b>' + earned + '</b> earned today</div>'
-        : '<div class="rew-tally">' + escapeHtml(dayLabel(key)) + ' · <b>' + earned + '</b> earned · <b>' + spent + '</b> spent</div>';
+        : '<div class="rew-tally">' + escapeHtml(dayLabel(key)) + ' · <b>' + earned + '</b> earned · <b>' + spent + '</b> spent' +
+          (editable ? ' · <b class="' + (wallet > 0 ? "pos" : "") + '">' + wallet + '</b> saved to spend' : '') + '</div>';
       var e = data[key];
       var logs = (e && e.rewards && e.rewards.length)
         ? '<div class="rew-logs">' + e.rewards.map(function (x, i) {
             return '<div class="rew-log"><span class="rew-logl">✓ ' + escapeHtml(x.label) + '</span><span class="rew-logc">−' + (+x.cost || 0) + '</span>' +
-              (isToday ? '<button class="rew-undo" data-undo="' + i + '" title="Undo">×</button>' : '') + '</div>';
+              (editable ? '<button class="rew-undo" data-undo="' + i + '" title="Undo">×</button>' : '') + '</div>';
           }).join("") + '</div>'
-        : (isToday ? "" : '<div class="rew-empty">No rewards bought this day.</div>');
+        : (editable ? "" : '<div class="rew-empty">No rewards bought this day.</div>');
       // Tiers: the cheapest reward you can't yet afford becomes the "saving toward" target;
       // every unaffordable reward shows a progress bar so bigger rewards read as goals.
       var nextIdx = -1, nextCost = Infinity;
@@ -4117,7 +4120,7 @@
       var tier = nextIdx >= 0
         ? '<div class="rew-next">Saving toward <b>' + escapeHtml(rewardsCat[nextIdx].label) + '</b> · <b>' + (nextCost - wallet) + '</b> to go</div>'
         : (wallet > 0 && rewardsCat.length ? '<div class="rew-next all">Everything\'s unlocked — treat yourself.</div>' : "");
-      var items = isToday ? tier + '<div class="rew-list">' + rewardsCat.map(function (r, i) {
+      var items = editable ? tier + '<div class="rew-list">' + rewardsCat.map(function (r, i) {
         var cost = +r.cost || 0, afford = wallet >= cost;
         var right = afford
           ? '<button class="rew-buy" data-buy="' + i + '">Buy</button>'
@@ -4129,11 +4132,11 @@
           right +
           '</div>';
       }).join("") + '</div>' : "";
-      var actions = isToday ? '<div class="sched-actions"><button class="lnk" data-ract="edit">Edit rewards</button></div>' : "";
+      var actions = editable ? '<div class="sched-actions"><button class="lnk" data-ract="edit">Edit rewards</button></div>' : "";
       body = '<div class="sched-body">' + tally + logs + items + actions + '</div>';
     }
     host.innerHTML = now + body;
-    if (rewardsOpen && rewardsEditing && isToday) {
+    if (rewardsOpen && rewardsEditing && editable) {
       enableReorder(host.querySelector(".sched-body"), {
         itemSelector: ".blk.edit", handleSelector: "[data-drag]",
         onReorder: function (from, to) { var arr = readRewardEdits(); arrMove(arr, from, to); rewardsCat = arr; saveRewardsCat(arr); renderRewards(); }
