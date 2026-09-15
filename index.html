@@ -892,8 +892,15 @@
   .m-play:hover { filter: brightness(1.08); }
   .m-list { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
   .m-track { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: none; cursor: pointer; color: var(--text); padding: 9px 8px; border-radius: 10px; }
-  .m-track:hover { background: var(--panel-2); }
+  .m-track[data-mtrack]:hover { background: var(--panel-2); }
   .m-track.current { background: rgba(124,196,255,0.10); }
+  .m-track.editing { background: var(--panel-2); cursor: default; }
+  .m-tedit-btn, .m-tedit-save { flex: 0 0 auto; background: none; border: none; cursor: pointer; padding: 4px 6px; line-height: 1; border-radius: 8px; }
+  .m-tedit-btn { font-size: 14px; color: var(--muted); opacity: .65; }
+  .m-track:hover .m-tedit-btn { opacity: 1; }
+  .m-tedit-btn:hover { color: var(--text); background: var(--panel); }
+  .m-tedit-save { font-size: 15px; color: var(--dc, var(--accent)); font-weight: 700; }
+  .m-tedit { flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--dc, var(--accent)); color: var(--text); border-radius: 8px; padding: 6px 8px; font-size: 14px; font-family: inherit; font-weight: 600; outline: none; }
   .m-tnum { flex: 0 0 auto; width: 22px; text-align: center; font-size: 13px; color: var(--faint); font-variant-numeric: tabular-nums; }
   .m-track.current .m-tnum { color: var(--dc, var(--accent)); }
   .m-tmeta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -2003,9 +2010,22 @@
   // and appending an entry here: { title, artist, src }. (artist optional.)
   var PLAYLIST = [
     { title: "Live and Die on This Day", artist: "The Creed", src: "live-and-die-on-this-day.mp3" },
+    { title: "Andhariki Teluse", artist: "Live and Die happier", src: "andhariki-teluse-live-and-die-happier.mp3" },
   ];
   var mAudio = document.getElementById("musicAudio");
   var mCur = -1;            // index of the loaded track, -1 = none loaded yet
+  var mEditIdx = -1;        // playlist index being renamed, -1 = none
+  // Custom song names are stored locally, keyed by file src (the default title is the fallback).
+  var MUSIC_TITLES_KEY = "compounder.music.titles";
+  function mLoadTitles() { try { return JSON.parse(localStorage.getItem(MUSIC_TITLES_KEY)) || {}; } catch (e) { return {}; } }
+  var mTitles = mLoadTitles();
+  function mTitle(s) { var o = mTitles[s.src]; return (o != null && String(o).trim()) ? o : s.title; }
+  function mSaveTitle(i, val) {
+    var s = PLAYLIST[i]; if (!s) return;
+    val = String(val || "").trim();
+    if (!val || val === s.title) delete mTitles[s.src]; else mTitles[s.src] = val; // blank/unchanged → drop the override
+    try { localStorage.setItem(MUSIC_TITLES_KEY, JSON.stringify(mTitles)); } catch (e) {}
+  }
   function mFmt(t) { t = Math.max(0, Math.floor(t || 0)); var m = Math.floor(t / 60), s = t % 60; return m + ":" + (s < 10 ? "0" : "") + s; }
   function mLoad(i, autoplay) {
     if (i < 0 || i >= PLAYLIST.length) return;
@@ -2055,7 +2075,7 @@
       '<div class="m-now">' +
         '<div class="m-art">🎵</div>' +
         '<div class="m-nowtext">' +
-          '<div class="m-nowtitle">' + (t ? escapeHtml(t.title) : "Nothing playing") + '</div>' +
+          '<div class="m-nowtitle">' + (t ? escapeHtml(mTitle(t)) : "Nothing playing") + '</div>' +
           '<div class="m-nowartist">' + (t && t.artist ? escapeHtml(t.artist) : "Pick a song below") + '</div>' +
         '</div>' +
       '</div>' +
@@ -2070,13 +2090,19 @@
         '<button class="m-ctl" id="mNext" aria-label="Next track" title="Next">⏭</button>' +
       '</div>';
     var list = '<div class="m-list">' + PLAYLIST.map(function (s, i) {
-      var isCur = i === mCur;
-      return '<button class="m-track' + (isCur ? " current" : "") + '" data-mtrack="' + i + '">' +
+      var isCur = i === mCur, editing = i === mEditIdx;
+      var meta = editing
+        ? '<input class="m-tedit" data-meditinput="' + i + '" value="' + escapeHtml(mTitle(s)) + '" aria-label="Song name" maxlength="120">'
+        : '<span class="m-tmeta"><span class="m-ttitle">' + escapeHtml(mTitle(s)) + '</span>' +
+            (s.artist ? '<span class="m-tartist">' + escapeHtml(s.artist) + '</span>' : "") + '</span>';
+      var rightBtn = editing
+        ? '<button class="m-tedit-save" data-meditsave="' + i + '" title="Save name" aria-label="Save name">✓</button>'
+        : '<button class="m-tedit-btn" data-medit="' + i + '" title="Rename" aria-label="Rename song">✎</button>';
+      return '<div class="m-track' + (isCur ? " current" : "") + (editing ? " editing" : "") + '"' +
+          (editing ? "" : ' data-mtrack="' + i + '" role="button" tabindex="0"') + '>' +
         '<span class="m-tnum">' + (isCur && playing ? '<span class="m-bars"><i></i><i></i><i></i></span>' : (i + 1)) + '</span>' +
-        '<span class="m-tmeta"><span class="m-ttitle">' + escapeHtml(s.title) + '</span>' +
-          (s.artist ? '<span class="m-tartist">' + escapeHtml(s.artist) + '</span>' : "") + '</span>' +
-        (isCur ? '<span class="m-tstate">' + (playing ? "▮▮" : "▶") + '</span>' : "") +
-        '</button>';
+        meta + rightBtn +
+        '</div>';
     }).join("") + '</div>';
     back.innerHTML = '<div class="modal" style="--dc:#7cc4ff">' + head + np + list + '</div>';
     mSeekTick();
@@ -2094,9 +2120,20 @@
     document.body.style.overflow = "";
   }
   document.getElementById("musicBtn").addEventListener("click", openMusic);
+  function mFocusEdit() { var inp = document.querySelector("#musicModal [data-meditinput]"); if (inp) { inp.focus(); inp.select(); } }
+  function mBeginEdit(i) { mEditIdx = i; mRender(); mFocusEdit(); }
+  function mCommitEdit() {
+    if (mEditIdx < 0) return;
+    var inp = document.querySelector("#musicModal [data-meditinput]");
+    if (inp) mSaveTitle(mEditIdx, inp.value);
+    mEditIdx = -1; mRender();
+  }
+  function mCancelEdit() { mEditIdx = -1; mRender(); }
   document.getElementById("musicModal").addEventListener("click", function (ev) {
     var el;
-    if (ev.target.id === "musicModal" || ev.target.closest("[data-mclose]")) { closeMusic(); return; }
+    if (ev.target.id === "musicModal" || ev.target.closest("[data-mclose]")) { mCommitEdit(); closeMusic(); return; }
+    if ((el = ev.target.closest("[data-medit]"))) { mBeginEdit(+el.getAttribute("data-medit")); return; }
+    if ((el = ev.target.closest("[data-meditsave]"))) { mCommitEdit(); return; }
     if (ev.target.closest("#mPlay")) { mToggle(); return; }
     if (ev.target.closest("#mPrev")) { mPrev(); return; }
     if (ev.target.closest("#mNext")) { mNext(); return; }
@@ -2105,6 +2142,18 @@
       if (i === mCur && !mAudio.paused) mAudio.pause(); else mLoad(i, true);
       return;
     }
+  });
+  // Rename input: Enter/blur commits, Esc cancels (and doesn't close the modal).
+  document.getElementById("musicModal").addEventListener("keydown", function (ev) {
+    if (!ev.target.matches || !ev.target.matches("[data-meditinput]")) return;
+    if (ev.key === "Enter") { ev.preventDefault(); mCommitEdit(); }
+    else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); mCancelEdit(); }
+  }, true);
+  document.getElementById("musicModal").addEventListener("focusout", function (ev) {
+    if (!ev.target.matches || !ev.target.matches("[data-meditinput]")) return;
+    var idx = +ev.target.getAttribute("data-meditinput"), val = ev.target.value;
+    mSaveTitle(idx, val); // persist the edit on blur, whatever happens next
+    setTimeout(function () { if (mEditIdx === idx) { mEditIdx = -1; mRender(); } }, 0); // leave a freshly-started edit alone
   });
   document.getElementById("musicModal").addEventListener("input", function (ev) {
     if (ev.target.id !== "mSeek") return;
