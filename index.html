@@ -74,13 +74,6 @@
   .creed-text { flex: 1 1 auto; min-width: 0; }
   .creed p { margin: 0; font-style: italic; font-size: 14px; line-height: 1.6; color: var(--muted); }
   .creed .creed-punch { margin-top: 3px; color: var(--accent); font-weight: 600; }
-  .creed-play { flex: 0 0 auto; width: 42px; height: 42px; padding-left: 2px; border-radius: 50%;
-    border: 1px solid var(--accent); background: rgba(217,164,65,0.12); color: var(--accent);
-    font-size: 15px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: background .15s ease, transform .1s ease; }
-  .creed-play:hover { background: rgba(217,164,65,0.22); }
-  .creed-play:active { transform: scale(.94); }
-  .creed-play.playing { padding-left: 0; background: var(--accent); color: #241a04; }
   @media (max-width: 480px) { .creed p { font-size: 13.5px; } }
 
   /* Daily "Today" hero — rotates each day so the top always has something fresh */
@@ -875,6 +868,43 @@
   /* YouTube summarizer: header icon + modal */
   .yt-btn { background: none; border: none; cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 4px; margin-left: 2px; opacity: .8; filter: grayscale(.2); }
   .yt-btn:hover { opacity: 1; filter: none; }
+  .music-btn.playing { opacity: 1; filter: none; animation: m-pulse 1.6s ease-in-out infinite; }
+  @keyframes m-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+  @media (prefers-reduced-motion: reduce) { .music-btn.playing { animation: none; } }
+  /* --- Music player modal --- */
+  .m-now { display: flex; align-items: center; gap: 14px; padding: 8px 0 4px; }
+  .m-art { flex: 0 0 auto; width: 60px; height: 60px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 28px;
+    background: linear-gradient(140deg, rgba(124,196,255,0.28), rgba(124,196,255,0.08)); border: 1px solid var(--border); }
+  .m-nowtext { min-width: 0; }
+  .m-nowtitle { font-size: 16px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-nowartist { font-size: 13px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-seekrow { display: flex; align-items: center; gap: 10px; margin: 14px 0 2px; }
+  .m-time { flex: 0 0 auto; font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; min-width: 30px; text-align: center; }
+  .m-seek { flex: 1; -webkit-appearance: none; appearance: none; height: 5px; border-radius: 4px; background: var(--panel-2); outline: none; cursor: pointer; }
+  .m-seek::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--dc, var(--accent)); border: none; cursor: pointer; }
+  .m-seek::-moz-range-thumb { width: 15px; height: 15px; border: none; border-radius: 50%; background: var(--dc, var(--accent)); cursor: pointer; }
+  .m-controls { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 14px 0 6px; }
+  .m-ctl { background: none; border: none; color: var(--text); font-size: 22px; line-height: 1; cursor: pointer; padding: 6px; opacity: .9; }
+  .m-ctl:hover { opacity: 1; }
+  .m-ctl:active { transform: scale(.92); }
+  .m-play { width: 56px; height: 56px; border-radius: 50%; background: var(--dc, var(--accent)); color: #08121c; font-size: 24px; display: flex; align-items: center; justify-content: center; padding-left: 2px; }
+  .m-play:hover { filter: brightness(1.08); }
+  .m-list { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .m-track { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: none; cursor: pointer; color: var(--text); padding: 9px 8px; border-radius: 10px; }
+  .m-track:hover { background: var(--panel-2); }
+  .m-track.current { background: rgba(124,196,255,0.10); }
+  .m-tnum { flex: 0 0 auto; width: 22px; text-align: center; font-size: 13px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .m-track.current .m-tnum { color: var(--dc, var(--accent)); }
+  .m-tmeta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .m-ttitle { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-track.current .m-ttitle { color: var(--dc, var(--accent)); }
+  .m-tartist { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-tstate { flex: 0 0 auto; font-size: 12px; color: var(--dc, var(--accent)); }
+  .m-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 13px; }
+  .m-bars i { width: 3px; background: var(--dc, var(--accent)); border-radius: 1px; animation: m-eq .9s ease-in-out infinite; }
+  .m-bars i:nth-child(1) { animation-delay: -.2s; } .m-bars i:nth-child(2) { animation-delay: -.5s; } .m-bars i:nth-child(3) { animation-delay: -.8s; }
+  @keyframes m-eq { 0%,100% { height: 4px; } 50% { height: 13px; } }
+  @media (prefers-reduced-motion: reduce) { .m-bars i { animation: none; height: 9px; } }
   .yt-form { display: flex; gap: 8px; padding: 4px 0 10px; }
   .yt-url { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 11px; font-size: 14px; font-family: inherit; outline: none; }
   .yt-url:focus { border-color: var(--dc, var(--accent)); }
@@ -1075,7 +1105,7 @@
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1><span class="dot"></span>Compounder<button class="yt-btn" id="ytBtn" title="Summarize a YouTube video" aria-label="Summarize a YouTube video">🎬</button></h1>
+      <h1><span class="dot"></span>Compounder<button class="yt-btn" id="ytBtn" title="Summarize a YouTube video" aria-label="Summarize a YouTube video">🎬</button><button class="yt-btn music-btn" id="musicBtn" title="Music" aria-label="Open the music player">🎵</button></h1>
       <div class="brand-right">
         <span class="date" id="date"></span>
         <span class="pill" id="syncPill"><span>Sign in</span></span>
@@ -1094,8 +1124,6 @@
       <p>Once more into the fray. Into the last good fight I'll ever know.</p>
       <p class="creed-punch">Live and die on this day. Live and die on this day.</p>
     </div>
-    <button class="creed-play" id="creedPlay" aria-label="Play the creed" title="Play" style="display:none">▶</button>
-    <audio id="creedAudio" preload="none" src="live-and-die-on-this-day.mp3"></audio>
   </blockquote>
 
   <section class="auth-panel" id="authPanel"></section>
@@ -1178,6 +1206,8 @@
 <div class="modal-backdrop" id="tipsModal"></div>
 <div class="modal-backdrop" id="metricModal"></div>
 <div class="modal-backdrop" id="ytModal"></div>
+<div class="modal-backdrop" id="musicModal"></div>
+<audio id="musicAudio" preload="none"></audio>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -1967,15 +1997,127 @@
     if (ev.target.id === "ovSheetBackdrop" || (ev.target.closest && ev.target.closest("[data-ovclose]"))) closeOverviewSheet();
   });
 
-  // Creed audio: tap the play button to hear "Live and Die on This Day".
-  (function () {
-    var au = document.getElementById("creedAudio"), btn = document.getElementById("creedPlay");
-    if (!au || !btn) return;
-    btn.addEventListener("click", function () { if (au.paused) { au.play().catch(function () {}); } else { au.pause(); } });
-    au.addEventListener("play", function () { btn.textContent = "⏸"; btn.classList.add("playing"); btn.setAttribute("aria-label", "Pause the creed"); });
-    au.addEventListener("pause", function () { btn.textContent = "▶"; btn.classList.remove("playing"); btn.setAttribute("aria-label", "Play the creed"); });
-    au.addEventListener("ended", function () { au.currentTime = 0; });
-  })();
+  // ======================= Music player =======================
+  // Playlist grows over time — add a song by dropping its file next to index.html
+  // and appending an entry here: { title, artist, src }. (artist optional.)
+  var PLAYLIST = [
+    { title: "Live and Die on This Day", artist: "The Creed", src: "live-and-die-on-this-day.mp3" },
+  ];
+  var mAudio = document.getElementById("musicAudio");
+  var mCur = -1;            // index of the loaded track, -1 = none loaded yet
+  function mFmt(t) { t = Math.max(0, Math.floor(t || 0)); var m = Math.floor(t / 60), s = t % 60; return m + ":" + (s < 10 ? "0" : "") + s; }
+  function mLoad(i, autoplay) {
+    if (i < 0 || i >= PLAYLIST.length) return;
+    if (i !== mCur) { mCur = i; mAudio.src = PLAYLIST[i].src; }
+    if (autoplay) mAudio.play().catch(function () {});
+    mRender();
+  }
+  function mToggle() {
+    if (mCur < 0) { mLoad(0, true); return; }
+    if (mAudio.paused) mAudio.play().catch(function () {}); else mAudio.pause();
+  }
+  function mNext() { if (!PLAYLIST.length) return; mLoad((Math.max(0, mCur) + 1) % PLAYLIST.length, true); }
+  function mPrev() {
+    // Restart the track if we're past the first few seconds; otherwise go to the previous one.
+    if (mCur >= 0 && mAudio.currentTime > 3) { mAudio.currentTime = 0; return; }
+    if (!PLAYLIST.length) return;
+    mLoad((Math.max(0, mCur) - 1 + PLAYLIST.length) % PLAYLIST.length, true);
+  }
+  function mMusicBtn() { return document.getElementById("musicBtn"); }
+  // Keep the header 🎵 glowing while something is playing, wherever you are in the app.
+  mAudio.addEventListener("play", function () { var b = mMusicBtn(); if (b) b.classList.add("playing"); mRender(); });
+  mAudio.addEventListener("pause", function () { var b = mMusicBtn(); if (b) b.classList.remove("playing"); mRender(); });
+  mAudio.addEventListener("ended", function () { mNext(); });
+  mAudio.addEventListener("timeupdate", mSeekTick);
+  mAudio.addEventListener("loadedmetadata", mSeekTick);
+
+  function mSeekTick() {
+    var back = document.getElementById("musicModal");
+    if (!back || !back.classList.contains("open")) return;
+    var range = document.getElementById("mSeek"), cur = document.getElementById("mCurTime"), dur = document.getElementById("mDurTime");
+    if (range && !range.dataset.dragging) { var d = mAudio.duration || 0; range.max = d ? Math.floor(d) : 0; range.value = Math.floor(mAudio.currentTime || 0); }
+    if (cur) cur.textContent = mFmt(mAudio.currentTime);
+    if (dur) dur.textContent = mAudio.duration ? mFmt(mAudio.duration) : "0:00";
+  }
+
+  function mRender() {
+    var back = document.getElementById("musicModal");
+    if (!back || !back.classList.contains("open")) return;
+    var playing = !mAudio.paused && mCur >= 0;
+    var t = mCur >= 0 ? PLAYLIST[mCur] : null;
+    var head =
+      '<div class="modal-head"><div>' +
+        '<div class="modal-title">Music</div>' +
+        '<div class="modal-sub">Your playlist — tap a track to play</div>' +
+      '</div><button class="modal-close" data-mclose title="Close">×</button></div>';
+    var np =
+      '<div class="m-now">' +
+        '<div class="m-art">🎵</div>' +
+        '<div class="m-nowtext">' +
+          '<div class="m-nowtitle">' + (t ? escapeHtml(t.title) : "Nothing playing") + '</div>' +
+          '<div class="m-nowartist">' + (t && t.artist ? escapeHtml(t.artist) : "Pick a song below") + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="m-seekrow">' +
+        '<span class="m-time" id="mCurTime">0:00</span>' +
+        '<input class="m-seek" id="mSeek" type="range" min="0" max="0" value="0" aria-label="Seek">' +
+        '<span class="m-time" id="mDurTime">0:00</span>' +
+      '</div>' +
+      '<div class="m-controls">' +
+        '<button class="m-ctl" id="mPrev" aria-label="Previous track" title="Previous">⏮</button>' +
+        '<button class="m-ctl m-play" id="mPlay" aria-label="' + (playing ? "Pause" : "Play") + '" title="' + (playing ? "Pause" : "Play") + '">' + (playing ? "⏸" : "▶") + '</button>' +
+        '<button class="m-ctl" id="mNext" aria-label="Next track" title="Next">⏭</button>' +
+      '</div>';
+    var list = '<div class="m-list">' + PLAYLIST.map(function (s, i) {
+      var isCur = i === mCur;
+      return '<button class="m-track' + (isCur ? " current" : "") + '" data-mtrack="' + i + '">' +
+        '<span class="m-tnum">' + (isCur && playing ? '<span class="m-bars"><i></i><i></i><i></i></span>' : (i + 1)) + '</span>' +
+        '<span class="m-tmeta"><span class="m-ttitle">' + escapeHtml(s.title) + '</span>' +
+          (s.artist ? '<span class="m-tartist">' + escapeHtml(s.artist) + '</span>' : "") + '</span>' +
+        (isCur ? '<span class="m-tstate">' + (playing ? "▮▮" : "▶") + '</span>' : "") +
+        '</button>';
+    }).join("") + '</div>';
+    back.innerHTML = '<div class="modal" style="--dc:#7cc4ff">' + head + np + list + '</div>';
+    mSeekTick();
+  }
+
+  function openMusic() {
+    var back = document.getElementById("musicModal");
+    back.className = "modal-backdrop open";
+    document.body.style.overflow = "hidden";
+    mRender();
+  }
+  function closeMusic() {
+    var back = document.getElementById("musicModal");
+    back.className = "modal-backdrop"; back.innerHTML = "";
+    document.body.style.overflow = "";
+  }
+  document.getElementById("musicBtn").addEventListener("click", openMusic);
+  document.getElementById("musicModal").addEventListener("click", function (ev) {
+    var el;
+    if (ev.target.id === "musicModal" || ev.target.closest("[data-mclose]")) { closeMusic(); return; }
+    if (ev.target.closest("#mPlay")) { mToggle(); return; }
+    if (ev.target.closest("#mPrev")) { mPrev(); return; }
+    if (ev.target.closest("#mNext")) { mNext(); return; }
+    if ((el = ev.target.closest("[data-mtrack]"))) {
+      var i = +el.getAttribute("data-mtrack");
+      if (i === mCur && !mAudio.paused) mAudio.pause(); else mLoad(i, true);
+      return;
+    }
+  });
+  document.getElementById("musicModal").addEventListener("input", function (ev) {
+    if (ev.target.id !== "mSeek") return;
+    ev.target.dataset.dragging = "1";
+    var c = document.getElementById("mCurTime"); if (c) c.textContent = mFmt(+ev.target.value);
+  });
+  document.getElementById("musicModal").addEventListener("change", function (ev) {
+    if (ev.target.id !== "mSeek") return;
+    if (mCur < 0) { delete ev.target.dataset.dragging; return; }
+    mAudio.currentTime = +ev.target.value; delete ev.target.dataset.dragging;
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && document.getElementById("musicModal").classList.contains("open")) closeMusic();
+  });
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && overviewTab && !metricDraft && !tipsOpenDom) closeOverviewSheet();
   });
@@ -4749,10 +4891,6 @@
 
   function onAuth(newSession) {
     session = newSession || null;
-    // Creed song is for signed-in users only — hide the play button (and stop playback) when signed out.
-    var cp = document.getElementById("creedPlay"), ca = document.getElementById("creedAudio");
-    if (cp) cp.style.display = session ? "" : "none";
-    if (!session && ca) { try { ca.pause(); ca.currentTime = 0; } catch (e) {} }
     data = load(); // reload the board for the now-current scope (this user, or anon)
     onAuthSchedule(); // reload + reconcile the schedule for this account
     onAuthRewards();  // reload + reconcile the rewards catalog for this account
