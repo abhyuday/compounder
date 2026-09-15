@@ -868,7 +868,7 @@
   /* YouTube summarizer: header icon + modal */
   .yt-btn { background: none; border: none; cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 4px; margin-left: 2px; opacity: .8; filter: grayscale(.2); }
   .yt-btn:hover { opacity: 1; filter: none; }
-  .music-btn { opacity: 1; filter: none; }
+  .music-btn { opacity: 1; filter: brightness(1.35) saturate(1.25) drop-shadow(0 0 6px rgba(124,196,255,0.5)); }
   .music-btn.playing { animation: m-pulse 1.6s ease-in-out infinite; }
   @keyframes m-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
   @media (prefers-reduced-motion: reduce) { .music-btn.playing { animation: none; } }
