@@ -126,6 +126,38 @@
   .rec-save:hover { filter: brightness(1.07); }
   .rec-cancel { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 9px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
   .rec-cancel:hover { color: var(--text); }
+  /* Recovery card: the North Star echoed as the "why" at the top of a slump */
+  .rec-why { margin-top: 12px; padding: 11px 13px; background: rgba(217,164,65,0.08); border: 1px solid rgba(217,164,65,0.3); border-radius: 11px; }
+  .rec-why-tag { display: block; font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); font-weight: 800; margin-bottom: 5px; }
+  .rec-why-text { font-size: 14.5px; line-height: 1.5; color: var(--text); font-style: italic; }
+
+  /* North Star (purpose / the why) */
+  .northstar { margin-bottom: 18px; }
+  .northstar:empty { display: none; }
+  .ns-band { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+    background: linear-gradient(180deg, rgba(217,164,65,0.07), var(--panel)); border: 1px solid rgba(217,164,65,0.32); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 13px 15px; }
+  .ns-band:hover { border-color: rgba(217,164,65,0.6); }
+  .ns-star { flex: 0 0 auto; color: var(--accent); font-size: 17px; line-height: 1; }
+  .ns-text { flex: 1 1 auto; min-width: 0; font-size: 14px; line-height: 1.5; color: var(--text); font-style: italic; }
+  .ns-band.ns-empty .ns-text { color: var(--muted); font-style: normal; font-weight: 600; }
+  .ns-edit-ic { flex: 0 0 auto; color: var(--faint); font-size: 14px; }
+  .ns-card { background: linear-gradient(180deg, rgba(217,164,65,0.07), var(--panel)); border: 1px solid rgba(217,164,65,0.4);
+    border-top: 3px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow); padding: 15px 16px; }
+  .ns-edit-head { font-size: 13px; font-weight: 800; letter-spacing: .03em; color: var(--accent); text-transform: uppercase; }
+  .ns-edit-sub { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 5px; }
+  .ns-frames { display: flex; gap: 8px; margin: 12px 0 10px; }
+  .ns-frame { flex: 1; cursor: pointer; font-family: inherit; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 9px; padding: 8px 10px; font-size: 12.5px; font-weight: 700; }
+  .ns-frame.on { background: rgba(217,164,65,0.14); border-color: var(--accent); color: var(--accent); }
+  .ns-ta { width: 100%; box-sizing: border-box; background: var(--panel); border: 1px solid var(--accent); color: var(--text);
+    border-radius: 10px; padding: 11px 12px; font-size: 15px; font-family: inherit; line-height: 1.55; min-height: 96px; resize: vertical; outline: none; }
+  .ns-hint { font-size: 11.5px; color: var(--faint); margin-top: 7px; }
+  .ns-actions { display: flex; gap: 9px; margin-top: 11px; }
+  .ns-save { background: var(--accent); color: #241a04; border: none; border-radius: 9px; padding: 8px 16px; font-size: 13px; font-weight: 800; cursor: pointer; }
+  .ns-save:hover { filter: brightness(1.07); }
+  .ns-cancel { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 9px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .ns-cancel:hover { color: var(--text); }
 
   /* Milestones grid */
   #milestones .rew-emoji { font-size: 15px; flex: 0 0 auto; }
@@ -1170,6 +1202,8 @@
   <section class="auth-panel" id="authPanel"></section>
 
   <section class="recovery" id="recovery"></section>
+
+  <section class="northstar" id="northstar"></section>
 
   <section class="scorecard" id="scoreCard"></section>
 
@@ -3435,10 +3469,13 @@
       : '<div class="rec-floor">Your only job today: <b>move the needle once.</b> Not five. One.' +
           (s.rec ? '<button class="rec-go" data-recfocus="' + s.rec + '">Start with ' + escapeHtml(domName(s.rec)) + ' ›</button>' : "") +
         '</div>';
+    var why = northstarText()
+      ? '<div class="rec-why"><span class="rec-why-tag">Remember why</span><div class="rec-why-text">' + escapeHtml(northstarText()) + '</div></div>'
+      : "";
     host.innerHTML = '<div class="rec-card">' +
       '<div class="rec-head"><span class="rec-badge">⛑️ Recovery mode</span>' +
         '<span class="rec-sub">' + s.missDays + ' day' + (s.missDays === 1 ? "" : "s") + ' slipped — that’s the signal, not a verdict.</span></div>' +
-      floor + recPlanBlock() + '</div>';
+      why + floor + recPlanBlock() + '</div>';
   }
   document.getElementById("recovery").addEventListener("click", function (ev) {
     var el;
@@ -3452,6 +3489,55 @@
     if (ev.target.closest("[data-recedit]")) { recoveryEditing = true; renderRecovery(); var ta = document.getElementById("recPlanTa"); if (ta) { ta.focus(); } return; }
     if (ev.target.closest("[data-recsave]")) { var t = document.getElementById("recPlanTa"); setRecoveryPlan(t ? t.value : ""); recoveryEditing = false; renderRecovery(); return; }
     if (ev.target.closest("[data-reccancel]")) { recoveryEditing = false; renderRecovery(); return; }
+  });
+
+  // ======================= North Star (purpose / the why) =======================
+  // The reason behind all of it — self-written once, resurfaced quietly at the top and,
+  // during a slump, as the headline of the Recovery card. The app can't manufacture a
+  // why; it just holds up yours when you're about to quit.
+  function nsEditorHtml() {
+    var fr = northstarFrame;
+    return '<div class="ns-edit-head">Your North Star</div>' +
+      '<div class="ns-edit-sub">Why any of this matters. Write it once — the app holds it up when you’re about to quit.</div>' +
+      '<div class="ns-frames">' +
+        '<button class="ns-frame' + (fr === "become" ? " on" : "") + '" data-nsframe="become">Who I’m becoming</button>' +
+        '<button class="ns-frame' + (fr === "regret" ? " on" : "") + '" data-nsframe="regret">What I won’t regret</button>' +
+      '</div>' +
+      '<textarea class="ns-ta" id="nsTa" placeholder="' + escapeHtml(NS_PLACEHOLDER[fr]) + '">' + escapeHtml(northstarText()) + '</textarea>' +
+      '<div class="ns-hint">One or two sentences, in your own words — not a slogan.</div>' +
+      '<div class="ns-actions"><button class="ns-save" data-nssave>Save</button><button class="ns-cancel" data-nscancel>Cancel</button></div>';
+  }
+  function renderNorthstar() {
+    var host = document.getElementById("northstar");
+    if (!host) return;
+    if (northstarEditing) { host.innerHTML = '<div class="ns-card">' + nsEditorHtml() + '</div>'; return; }
+    var txt = northstarText();
+    // During an active slump the Recovery card already shows the star — don't say it twice.
+    if (txt && slumpInfo().active) { host.innerHTML = ""; return; }
+    host.innerHTML = txt
+      ? '<button class="ns-band" data-nsedit><span class="ns-star">★</span><span class="ns-text">' + escapeHtml(txt) + '</span><span class="ns-edit-ic">✎</span></button>'
+      : '<button class="ns-band ns-empty" data-nsedit><span class="ns-star">★</span><span class="ns-text">Set your North Star — the reason behind all of this</span><span class="ns-edit-ic">›</span></button>';
+  }
+  document.getElementById("northstar").addEventListener("click", function (ev) {
+    if (ev.target.closest("[data-nsframe]")) {
+      // Swap the framing in place so the placeholder updates without losing typed text.
+      northstarFrame = ev.target.closest("[data-nsframe]").getAttribute("data-nsframe");
+      var host = document.getElementById("northstar");
+      Array.prototype.forEach.call(host.querySelectorAll("[data-nsframe]"), function (c) { c.classList.toggle("on", c.getAttribute("data-nsframe") === northstarFrame); });
+      var ta = document.getElementById("nsTa"); if (ta) ta.setAttribute("placeholder", NS_PLACEHOLDER[northstarFrame]);
+      return;
+    }
+    if (ev.target.closest("[data-nsedit]")) {
+      northstarEditing = true; northstarFrame = (northstar && northstar.frame) || "become"; renderNorthstar();
+      var t = document.getElementById("nsTa"); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+      return;
+    }
+    if (ev.target.closest("[data-nssave]")) {
+      var el = document.getElementById("nsTa"); setNorthstar(el ? el.value : "", northstarFrame);
+      northstarEditing = false; renderNorthstar(); renderRecovery();
+      return;
+    }
+    if (ev.target.closest("[data-nscancel]")) { northstarEditing = false; renderNorthstar(); return; }
   });
 
   // ======================= Milestones (earned, sticky, synced) =======================
@@ -4063,6 +4149,54 @@
   function setRecoveryPlan(t) { recovery.plan = String(t || "").trim(); saveRecovery(); }
   loadRecovery();
 
+  // ======================= North Star (purpose / the why, synced) =======================
+  var NORTHSTAR_KEY = "compounder.northstar";
+  var northstar = { text: "", frame: "become" };  // frame: "become" | "regret" (which prompt you wrote against)
+  var northstarTs = 0;
+  var northstarEditing = false, northstarFrame = "become";  // frame = live editor selection
+  var NS_PLACEHOLDER = {
+    become: "The person I’m becoming is…  e.g. someone my family can lean on, who stays curious at 70, who built something that outlasts me.",
+    regret: "I refuse to reach the end having…  e.g. traded my health for money I never spent, or gone missing from the people who mattered most."
+  };
+  function northstarStoreKey() { return session ? (NORTHSTAR_KEY + "." + session.user.id) : NORTHSTAR_KEY; }
+  function loadNorthstar() {
+    var k = northstarStoreKey();
+    try { var o = JSON.parse(localStorage.getItem(k)); if (o && typeof o === "object") { northstar = o; northstarTs = (+localStorage.getItem(k + ".ts")) || 0; return; } } catch (e) {}
+    northstar = { text: "", frame: "become" }; northstarTs = 0;
+  }
+  function persistNorthstar() {
+    var k = northstarStoreKey();
+    localStorage.setItem(k, JSON.stringify(northstar));
+    localStorage.setItem(k + ".ts", String(northstarTs));
+  }
+  function saveNorthstar() { northstarTs = Date.now(); persistNorthstar(); pushNorthstar(); }
+  function pushNorthstar() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert(
+      { user_id: session.user.id, northstar: northstar, northstar_updated_at: new Date(northstarTs || Date.now()).toISOString() },
+      { onConflict: "user_id" }
+    ).then(function () {}, function () {});
+  }
+  function syncNorthstar() {
+    if (!sb || !session) return;
+    sb.from("user_settings").select("northstar,northstar_updated_at").eq("user_id", session.user.id).maybeSingle()
+      .then(function (res) {
+        if (res.error) return; // column may not exist yet — silently skip
+        var r = res.data;
+        var rts = (r && r.northstar_updated_at) ? Date.parse(r.northstar_updated_at) : 0;
+        if (r && r.northstar && rts > northstarTs) {
+          northstar = r.northstar; northstarTs = rts; persistNorthstar();
+          if (!northstarEditing) { renderNorthstar(); renderRecovery(); }
+        } else if (northstarTs > rts && northstar && northstar.text) {
+          pushNorthstar();
+        }
+      }, function () {});
+  }
+  function onAuthNorthstar() { loadNorthstar(); if (session) syncNorthstar(); }
+  function northstarText() { return (northstar && northstar.text) ? northstar.text : ""; }
+  function setNorthstar(t, frame) { northstar = { text: String(t || "").trim(), frame: frame || "become" }; saveNorthstar(); }
+  loadNorthstar();
+
   function getTips(key) { return tips[key] !== undefined ? tips[key] : (DEFAULT_TIPS[key] || []); }
   function mutableTips(key) { var arr = getTips(key).slice(); tips[key] = arr; return arr; }
   function renderTipSurface() { if (dimSheetKey) renderDimSheet(); else renderTips(); }
@@ -4664,6 +4798,7 @@
   function renderAll() {
     syncOverviewOpen(); // keep panel open-state in sync with the active Overview tab
     if (!recoveryEditing) renderRecovery();
+    if (!northstarEditing) renderNorthstar();
     renderScore();
     renderTodayHero();
     renderWeekReview();
@@ -5127,6 +5262,7 @@
     onAuthJournal();  // reload + reconcile the private journal (account-only)
     onAuthTips();     // reload + reconcile per-dimension tips
     onAuthRecovery(); // reload + reconcile the if-then slump plan
+    onAuthNorthstar(); // reload + reconcile the North Star (purpose)
     loadReminderPrefs();
     if (session) {
       claimAnonBoard();
