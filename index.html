@@ -94,6 +94,39 @@
   .th-read { margin-top: 10px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
   .th-read b { color: var(--text); font-weight: 600; }
 
+  /* Recovery mode (slump circuit breaker) */
+  .recovery { margin-bottom: 18px; }
+  .recovery:empty { display: none; }
+  .rec-card { background: linear-gradient(180deg, rgba(224,112,74,0.10), var(--panel)); border: 1px solid rgba(224,112,74,0.45);
+    border-top: 3px solid #e0704a; border-radius: var(--radius); box-shadow: var(--shadow); padding: 15px 16px; }
+  .rec-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .rec-badge { font-size: 12px; font-weight: 800; letter-spacing: .04em; color: #e0704a; text-transform: uppercase; }
+  .rec-sub { font-size: 12.5px; color: var(--muted); }
+  .rec-floor { margin-top: 12px; font-size: 14.5px; line-height: 1.5; color: var(--text); }
+  .rec-floor b { font-weight: 800; }
+  .rec-floor.met { color: var(--done); font-weight: 600; font-size: 13.5px; }
+  .rec-go { display: block; margin-top: 11px; width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+    background: #e0704a; color: #1b0f0a; border: none; border-radius: 10px; padding: 11px 14px; font-size: 14px; font-weight: 800; }
+  .rec-go:hover { filter: brightness(1.07); }
+  .rec-prep { display: block; width: 100%; text-align: left; cursor: pointer; font-family: inherit;
+    background: var(--panel); border: 1px dashed rgba(224,112,74,0.5); color: var(--muted); border-radius: 12px; padding: 11px 14px; font-size: 13px; font-weight: 600; }
+  .rec-prep:hover { color: var(--text); border-color: #e0704a; }
+  .rec-plan { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .rec-plan-label { display: flex; align-items: center; gap: 8px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); font-weight: 700; }
+  .rec-plan-edit-btn { background: none; border: none; color: var(--faint); font-size: 13px; cursor: pointer; padding: 0 2px; }
+  .rec-plan-edit-btn:hover { color: var(--text); }
+  .rec-plan-body { margin-top: 8px; }
+  .rec-plan-line { font-size: 13.5px; color: var(--text); line-height: 1.5; padding: 3px 0 3px 15px; position: relative; }
+  .rec-plan-line::before { content: "→"; position: absolute; left: 0; color: #e0704a; font-weight: 700; }
+  .rec-plan-edit { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .rec-plan-ta { width: 100%; box-sizing: border-box; background: var(--panel); border: 1px solid #e0704a; color: var(--text);
+    border-radius: 10px; padding: 10px 11px; font-size: 14px; font-family: inherit; line-height: 1.5; min-height: 92px; resize: vertical; outline: none; }
+  .rec-plan-actions { display: flex; gap: 9px; margin-top: 10px; }
+  .rec-save { background: #e0704a; color: #1b0f0a; border: none; border-radius: 9px; padding: 8px 15px; font-size: 13px; font-weight: 800; cursor: pointer; }
+  .rec-save:hover { filter: brightness(1.07); }
+  .rec-cancel { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 9px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .rec-cancel:hover { color: var(--text); }
+
   /* Milestones grid */
   #milestones .rew-emoji { font-size: 15px; flex: 0 0 auto; }
   #milestones .hist-sum { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -1136,6 +1169,8 @@
 
   <section class="auth-panel" id="authPanel"></section>
 
+  <section class="recovery" id="recovery"></section>
+
   <section class="scorecard" id="scoreCard"></section>
 
   <section class="today-hero" id="todayHero"></section>
@@ -1387,6 +1422,33 @@
       i++;
     }
     return count;
+  }
+  // --- Slump signals (feed the Recovery circuit breaker) ---
+  // Consecutive COMPLETED days (yesterday backwards) that scored 0 points. Today is
+  // excluded because it's still open; a zero yesterday is the first real miss.
+  function missStreak() {
+    var e = earliestDayKey(); if (!e) return 0;
+    var n = 0;
+    for (var i = 1; i < 800; i++) { var k = ymd(addDays(today, -i)); if (k < e) break; if (dayPoints(k) === 0) n++; else break; }
+    return n;
+  }
+  // Zero-point days among the last n completed days.
+  function recentZeros(n) {
+    var e = earliestDayKey(); if (!e) return 0;
+    var z = 0;
+    for (var i = 1; i <= n; i++) { var k = ymd(addDays(today, -i)); if (k < e) break; if (dayPoints(k) === 0) z++; }
+    return z;
+  }
+  // A slump is "current" only when yesterday was a zero (missStreak >= 1) AND either the
+  // slide has run two days, or the trailing week is ragged (3+ zeros). New accounts (< 3
+  // days of history) never trip it. Returns the state the Recovery card renders from.
+  function slumpInfo() {
+    var info = { active: false, missDays: 0, todayMet: dayPoints(todayKey) >= 1, rec: recommendedDomain() };
+    if (!earliestDayKey() || elapsedDays() < 3) return info;
+    var ms = missStreak();
+    info.missDays = ms;
+    info.active = ms >= 2 || (ms >= 1 && recentZeros(7) >= 3);
+    return info;
   }
   // Per-dimension hit-rate over a trailing window (default 8 weeks), clamped to the
   // days actually tracked. Used by the weakest-link strip.
@@ -3328,6 +3390,70 @@
     if (card) { delete collapsedCards[key]; expandedCards[key] = true; renderCards(); card = document.querySelector('.card[data-domain="' + key + '"]'); if (card) card.scrollIntoView({ behavior: "smooth", block: "center" }); }
   });
 
+  // ======================= Recovery mode (slump circuit breaker) =======================
+  // Enforces the FLOOR (one needle-move today), never the ceiling. Appears only when a
+  // slump is current; relaxes into a bank-it confirmation the moment today's floor is met.
+  function recPlanHtml(t) {
+    return String(t).split(/\r?\n/).map(function (l) { l = l.trim(); return l ? '<div class="rec-plan-line">' + escapeHtml(l) + "</div>" : ""; }).join("");
+  }
+  function recPlanBlock() {
+    if (recoveryEditing) {
+      return '<div class="rec-plan-edit">' +
+        '<div class="rec-plan-label">When a slump hits, I will…</div>' +
+        '<textarea class="rec-plan-ta" id="recPlanTa" placeholder="One concrete line per action, e.g.&#10;Open the app and do the single easiest point — a 10-minute walk.&#10;Text a friend that I&#39;m back on.&#10;Never zero two days in a row.">' + escapeHtml(recoveryPlan()) + '</textarea>' +
+        '<div class="rec-plan-actions"><button class="rec-save" data-recsave>Save plan</button><button class="rec-cancel" data-reccancel>Cancel</button></div>' +
+      '</div>';
+    }
+    var plan = recoveryPlan();
+    if (plan) {
+      return '<div class="rec-plan">' +
+        '<div class="rec-plan-label">Your slump plan <button class="rec-plan-edit-btn" data-recedit title="Edit plan" aria-label="Edit plan">✎</button></div>' +
+        '<div class="rec-plan-body">' + recPlanHtml(plan) + '</div>' +
+      '</div>';
+    }
+    return '<button class="rec-prep" data-recedit>✍️ Write the one thing you’ll do when this hits — it’ll be waiting next time ›</button>';
+  }
+  function renderRecovery() {
+    var host = document.getElementById("recovery");
+    if (!host) return;
+    var s = slumpInfo();
+    // Calm state with no plan yet: a quiet pre-commitment nudge (only once there's a week of history).
+    if (!s.active) {
+      if (!recoveryPlan() && !recoveryEditing && elapsedDays() >= 7) {
+        host.innerHTML = '<div class="rec-card">' +
+          (recoveryEditing ? "" : '<div class="rec-head"><span class="rec-badge">⛑️ Before you need it</span></div>') +
+          recPlanBlock() + '</div>';
+      } else if (recoveryEditing) {
+        host.innerHTML = '<div class="rec-card"><div class="rec-head"><span class="rec-badge">⛑️ Slump plan</span></div>' + recPlanBlock() + '</div>';
+      } else {
+        host.innerHTML = "";
+      }
+      return;
+    }
+    var floor = s.todayMet
+      ? '<div class="rec-floor met">✓ You stopped the slide today. One point is enough — bank it, don’t chase the max.</div>'
+      : '<div class="rec-floor">Your only job today: <b>move the needle once.</b> Not five. One.' +
+          (s.rec ? '<button class="rec-go" data-recfocus="' + s.rec + '">Start with ' + escapeHtml(domName(s.rec)) + ' ›</button>' : "") +
+        '</div>';
+    host.innerHTML = '<div class="rec-card">' +
+      '<div class="rec-head"><span class="rec-badge">⛑️ Recovery mode</span>' +
+        '<span class="rec-sub">' + s.missDays + ' day' + (s.missDays === 1 ? "" : "s") + ' slipped — that’s the signal, not a verdict.</span></div>' +
+      floor + recPlanBlock() + '</div>';
+  }
+  document.getElementById("recovery").addEventListener("click", function (ev) {
+    var el;
+    if ((el = ev.target.closest("[data-recfocus]"))) {
+      var key = el.getAttribute("data-recfocus");
+      if (selectedKey !== todayKey) selectDay(todayKey);
+      var card = document.querySelector('.card[data-domain="' + key + '"]');
+      if (card) { delete collapsedCards[key]; expandedCards[key] = true; renderCards(); card = document.querySelector('.card[data-domain="' + key + '"]'); if (card) card.scrollIntoView({ behavior: "smooth", block: "center" }); }
+      return;
+    }
+    if (ev.target.closest("[data-recedit]")) { recoveryEditing = true; renderRecovery(); var ta = document.getElementById("recPlanTa"); if (ta) { ta.focus(); } return; }
+    if (ev.target.closest("[data-recsave]")) { var t = document.getElementById("recPlanTa"); setRecoveryPlan(t ? t.value : ""); recoveryEditing = false; renderRecovery(); return; }
+    if (ev.target.closest("[data-reccancel]")) { recoveryEditing = false; renderRecovery(); return; }
+  });
+
   // ======================= Milestones (earned, sticky, synced) =======================
   // Collectible one-time badges for durable, non-perfectionist wins. Once earned they
   // stick (even if the condition later lapses). The backlog on first run is adopted
@@ -3892,6 +4018,50 @@
   }
   function onAuthTips() { loadTips(); if (session) syncTips(); }
   loadTips();
+
+  // ======================= Recovery plan (if-then slump protocol, synced) =======================
+  var RECOVERY_KEY = "compounder.recovery";
+  var recovery = { plan: "" };   // { plan: "the one thing(s) I'll do when a slump hits" }
+  var recoveryTs = 0;
+  var recoveryEditing = false;
+  function recoveryStoreKey() { return session ? (RECOVERY_KEY + "." + session.user.id) : RECOVERY_KEY; }
+  function loadRecovery() {
+    var k = recoveryStoreKey();
+    try { var o = JSON.parse(localStorage.getItem(k)); if (o && typeof o === "object") { recovery = o; recoveryTs = (+localStorage.getItem(k + ".ts")) || 0; return; } } catch (e) {}
+    recovery = { plan: "" }; recoveryTs = 0;
+  }
+  function persistRecovery() {
+    var k = recoveryStoreKey();
+    localStorage.setItem(k, JSON.stringify(recovery));
+    localStorage.setItem(k + ".ts", String(recoveryTs));
+  }
+  function saveRecovery() { recoveryTs = Date.now(); persistRecovery(); pushRecovery(); }
+  function pushRecovery() {
+    if (!sb || !session) return;
+    sb.from("user_settings").upsert(
+      { user_id: session.user.id, recovery: recovery, recovery_updated_at: new Date(recoveryTs || Date.now()).toISOString() },
+      { onConflict: "user_id" }
+    ).then(function () {}, function () {});
+  }
+  function syncRecovery() {
+    if (!sb || !session) return;
+    sb.from("user_settings").select("recovery,recovery_updated_at").eq("user_id", session.user.id).maybeSingle()
+      .then(function (res) {
+        if (res.error) return; // column may not exist yet — silently skip
+        var r = res.data;
+        var rts = (r && r.recovery_updated_at) ? Date.parse(r.recovery_updated_at) : 0;
+        if (r && r.recovery && rts > recoveryTs) {
+          recovery = r.recovery; recoveryTs = rts; persistRecovery();
+          if (!recoveryEditing) renderRecovery();
+        } else if (recoveryTs > rts && recovery && recovery.plan) {
+          pushRecovery();
+        }
+      }, function () {});
+  }
+  function onAuthRecovery() { loadRecovery(); if (session) syncRecovery(); }
+  function recoveryPlan() { return (recovery && recovery.plan) ? recovery.plan : ""; }
+  function setRecoveryPlan(t) { recovery.plan = String(t || "").trim(); saveRecovery(); }
+  loadRecovery();
 
   function getTips(key) { return tips[key] !== undefined ? tips[key] : (DEFAULT_TIPS[key] || []); }
   function mutableTips(key) { var arr = getTips(key).slice(); tips[key] = arr; return arr; }
@@ -4493,6 +4663,7 @@
 
   function renderAll() {
     syncOverviewOpen(); // keep panel open-state in sync with the active Overview tab
+    if (!recoveryEditing) renderRecovery();
     renderScore();
     renderTodayHero();
     renderWeekReview();
@@ -4955,6 +5126,7 @@
     onAuthMilestones(); // reload + reconcile earned milestones
     onAuthJournal();  // reload + reconcile the private journal (account-only)
     onAuthTips();     // reload + reconcile per-dimension tips
+    onAuthRecovery(); // reload + reconcile the if-then slump plan
     loadReminderPrefs();
     if (session) {
       claimAnonBoard();
