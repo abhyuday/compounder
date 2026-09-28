@@ -993,6 +993,7 @@
   .m-lyr-sec { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--dc, var(--accent)); font-weight: 800; margin: 14px 0 5px; }
   .m-lyr-sec:first-child { margin-top: 2px; }
   .m-lyr-line { font-size: 14.5px; line-height: 1.62; color: var(--text); }
+  .m-lyr-note { font-size: 11.5px; color: var(--faint); font-style: italic; margin: 3px 0 2px; }
   .m-lyr-gap { height: 9px; }
   .m-lyr-empty { padding: 22px 6px; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
   .m-lyr-add { display: block; margin: 12px auto 0; cursor: pointer; font-family: inherit; background: var(--dc, var(--accent)); color: #08121c;
@@ -2164,10 +2165,71 @@
     "Okka adugu nuvvey veyyi\n" +
     "Ledante neney vachhesthaa\n" +
     "Ee premaki perey pettesthaa";
+  var BIGGER_LYRICS =
+    "[Intro]\n[Soft fingerpicked acoustic guitar]\n\n" +
+    "[Verse 1]\n[Gentle, intimate vocals]\n" +
+    "Woke up with a weight on your chest again\n" +
+    "Scrolling through the lives of your so-called friends\n" +
+    "Everybody's shining in a borrowed light\n" +
+    "And you're counting all the ways you don't measure right\n" +
+    "But the sun still climbed the hill today\n" +
+    "Didn't ask your rank before it came your way\n\n" +
+    "[Pre-Chorus]\n[Soft piano enters, building]\n" +
+    "So put the noise down, let it go\n" +
+    "There's a fire in you they'll never know\n\n" +
+    "[Chorus]\n[Drums enter, full band]\n" +
+    "Look up, the sky is wide open\n" +
+    "There's a world out there you haven't even seen\n" +
+    "Your heart's not broken, it's just unspoken\n" +
+    "There's a bigger life than who they want you to be\n" +
+    "Rain on your face, wind in your hair\n" +
+    "The road's still long and you're halfway there\n" +
+    "Don't shrink to fit what they think you're worth\n" +
+    "You were made for something bigger than this\n\n" +
+    "[Verse 2]\n[Pulled back, acoustic and light percussion]\n" +
+    "They'll talk about the car, the job, the name\n" +
+    "Like life's a race and everyone's the same\n" +
+    "But envy's just a thief that steals your days\n" +
+    "While your own dream's waiting in the haze\n" +
+    "There's laughter at the table, music in the night\n" +
+    "A hundred little wonders hiding in plain sight\n\n" +
+    "[Pre-Chorus]\n[Building intensity]\n" +
+    "So keep your eyes on your own sky\n" +
+    "You don't need their reasons why\n\n" +
+    "[Chorus]\n[Full band, strings]\n" +
+    "Look up, the sky is wide open\n" +
+    "There's a world out there you haven't even seen\n" +
+    "Your heart's not broken, it's just unspoken\n" +
+    "There's a bigger life than who they want you to be\n" +
+    "Rain on your face, wind in your hair\n" +
+    "The road's still long and you're halfway there\n" +
+    "Don't shrink to fit what they think you're worth\n" +
+    "You were made for something bigger than this\n\n" +
+    "[Bridge]\n[Breakdown, half-time, emotional]\n" +
+    "Every step you take is yours alone\n" +
+    "Every scar a map that leads you home\n" +
+    "Build it brick by brick and don't look back\n" +
+    "The ones who doubt you never walked your track\n" +
+    "[Building crescendo]\n" +
+    "The mountain doesn't care who got there first\n" +
+    "Just that you kept climbing through the hurt\n\n" +
+    "[Final Chorus]\n[Key change, anthemic, choir backing vocals]\n" +
+    "Look up, the sky is wide open\n" +
+    "And the world is waiting on the dream you hold\n" +
+    "Your heart's not broken, it's just unspoken\n" +
+    "So sing it louder, let the whole world know\n" +
+    "Rain on your face, fire in your veins\n" +
+    "You're writing your own name\n" +
+    "Don't shrink to fit what they think you're worth\n" +
+    "You were made for something bigger than this\n\n" +
+    "[Outro]\n[Stripped back, acoustic guitar only, soft]\n" +
+    "Bigger than this\n" +
+    "You were always bigger than this\n\n" +
+    "[End]";
   var PLAYLIST = [
     { title: "Live and Die on This Day", artist: "The Creed", src: "live-and-die-on-this-day.mp3" },
     { title: "Andhariki Teluse", artist: "Live and Die happier", src: "andhariki-teluse-live-and-die-happier.mp3", lyrics: ANDHARIKI_LYRICS },
-    { title: "Bigger Than This", artist: "Male vocal", src: "bigger-than-this-male.mp3" },
+    { title: "Bigger Than This", artist: "Male vocal", src: "bigger-than-this-male.mp3", lyrics: BIGGER_LYRICS },
   ];
   var mAudio = document.getElementById("musicAudio");
   var mCur = -1;            // index of the loaded track, -1 = none loaded yet
@@ -2232,12 +2294,17 @@
     if (dur) dur.textContent = mAudio.duration ? mFmt(mAudio.duration) : "0:00";
   }
 
-  // Render lyrics text: [Section] headers styled, blank lines become gaps.
+  // Render lyrics text: blank lines → gaps; [Section] tags → headers; longer bracketed
+  // phrases (stage directions like "[Gentle, intimate vocals]") → subtle notes.
   function mLyricsHtml(t) {
     return String(t).split(/\r?\n/).map(function (l) {
       var s = l.trim();
       if (!s) return '<div class="m-lyr-gap"></div>';
-      if (/^\[.*\]$/.test(s)) return '<div class="m-lyr-sec">' + escapeHtml(s.replace(/^\[|\]$/g, "")) + "</div>";
+      if (/^\[.*\]$/.test(s)) {
+        var label = s.replace(/^\[|\]$/g, "");
+        var isNote = label.indexOf(",") >= 0 || label.split(/\s+/).length >= 4; // a direction, not a section
+        return '<div class="' + (isNote ? "m-lyr-note" : "m-lyr-sec") + '">' + escapeHtml(label) + "</div>";
+      }
       return '<div class="m-lyr-line">' + escapeHtml(s) + "</div>";
     }).join("");
   }
