@@ -978,6 +978,35 @@
   .m-bars i:nth-child(1) { animation-delay: -.2s; } .m-bars i:nth-child(2) { animation-delay: -.5s; } .m-bars i:nth-child(3) { animation-delay: -.8s; }
   @keyframes m-eq { 0%,100% { height: 4px; } 50% { height: 13px; } }
   @media (prefers-reduced-motion: reduce) { .m-bars i { animation: none; height: 9px; } }
+  /* Playlist / Lyrics tabs */
+  .m-tabs { display: flex; gap: 6px; margin-top: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .m-tab { flex: 1; cursor: pointer; font-family: inherit; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 9px; padding: 8px 10px; font-size: 12.5px; font-weight: 700; }
+  .m-tab.on { background: rgba(124,196,255,0.14); border-color: var(--dc, var(--accent)); color: var(--dc, var(--accent)); }
+  /* Lyrics view */
+  .m-lyr { padding-top: 4px; }
+  .m-lyr-top { display: flex; align-items: center; gap: 10px; margin: 6px 0 8px; }
+  .m-lyr-for { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: var(--dc, var(--accent)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .m-lyr-editbtn { flex: 0 0 auto; background: none; border: none; color: var(--muted); font-size: 14px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+  .m-lyr-editbtn:hover { color: var(--text); background: var(--panel-2); }
+  .m-lyr-body { max-height: 44vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 2px 2px 4px; }
+  .m-lyr-sec { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--dc, var(--accent)); font-weight: 800; margin: 14px 0 5px; }
+  .m-lyr-sec:first-child { margin-top: 2px; }
+  .m-lyr-line { font-size: 14.5px; line-height: 1.62; color: var(--text); }
+  .m-lyr-gap { height: 9px; }
+  .m-lyr-empty { padding: 22px 6px; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+  .m-lyr-add { display: block; margin: 12px auto 0; cursor: pointer; font-family: inherit; background: var(--dc, var(--accent)); color: #08121c;
+    border: none; border-radius: 9px; padding: 8px 16px; font-size: 13px; font-weight: 800; }
+  .m-lyr-add:hover { filter: brightness(1.07); }
+  .m-lyr-editwrap { padding-top: 6px; }
+  .m-lyr-editlabel { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); font-weight: 700; margin-bottom: 7px; }
+  .m-lyr-ta { width: 100%; box-sizing: border-box; background: var(--panel); border: 1px solid var(--dc, var(--accent)); color: var(--text);
+    border-radius: 10px; padding: 11px 12px; font-size: 14px; font-family: inherit; line-height: 1.55; min-height: 200px; resize: vertical; outline: none; }
+  .m-lyr-actions { display: flex; gap: 9px; margin-top: 11px; }
+  .m-lyr-save { background: var(--dc, var(--accent)); color: #08121c; border: none; border-radius: 9px; padding: 8px 16px; font-size: 13px; font-weight: 800; cursor: pointer; }
+  .m-lyr-save:hover { filter: brightness(1.07); }
+  .m-lyr-cancel { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 9px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .m-lyr-cancel:hover { color: var(--text); }
   .yt-form { display: flex; gap: 8px; padding: 4px 0 10px; }
   .yt-url { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 11px; font-size: 14px; font-family: inherit; outline: none; }
   .yt-url:focus { border-color: var(--dc, var(--accent)); }
@@ -2104,14 +2133,59 @@
   // ======================= Music player =======================
   // Playlist grows over time — add a song by dropping its file next to index.html
   // and appending an entry here: { title, artist, src }. (artist optional.)
+  var ANDHARIKI_LYRICS =
+    "[Pallavi]\n\n" +
+    "Andarikee telusey... athanikey teliyadey\n" +
+    "Naa gunde cheppani ee maata\n" +
+    "Gaajulakee telusey... gaalikee telusey\n" +
+    "Naa adugey maarina aa baata\n\n" +
+    "Athanu nadichosthe... allari gaajulu\n" +
+    "Dorikipoyaaney ee vela\n" +
+    "Daachesthe daagunaa cheppu\n" +
+    "Naa oopiri nindina vennela\n\n" +
+    "[Charanam 1]\n\n" +
+    "Athani gonthulo edo manthram\n" +
+    "Naa peru palikinappudu\n" +
+    "Navvinappudu nuduti meeda\n" +
+    "Okka munguru kadilindi\n\n" +
+    "Bhujam meeda enda vaali\n" +
+    "Needa kooda andamgaa undi\n" +
+    "Cheppaalante bhayam, cheppakunte baruvu\n" +
+    "Ee nireekshane andam\n\n" +
+    "[Anupallavi]\n\n" +
+    "Ae daari nadichinaa... ae malupu thiriginaa\n" +
+    "Annee athani vaipey\n\n" +
+    "[Charanam 2]\n\n" +
+    "Raathri podugoo okka aalochana\n" +
+    "Nidraki kooda alupey\n" +
+    "Addham mundu nilabadithe\n" +
+    "Naa buggalu nanney adigey\n\n" +
+    "Inkentha kaalam ee dooram\n" +
+    "Okka adugu nuvvey veyyi\n" +
+    "Ledante neney vachhesthaa\n" +
+    "Ee premaki perey pettesthaa";
   var PLAYLIST = [
     { title: "Live and Die on This Day", artist: "The Creed", src: "live-and-die-on-this-day.mp3" },
-    { title: "Andhariki Teluse", artist: "Live and Die happier", src: "andhariki-teluse-live-and-die-happier.mp3" },
+    { title: "Andhariki Teluse", artist: "Live and Die happier", src: "andhariki-teluse-live-and-die-happier.mp3", lyrics: ANDHARIKI_LYRICS },
     { title: "Bigger Than This", artist: "Male vocal", src: "bigger-than-this-male.mp3" },
   ];
   var mAudio = document.getElementById("musicAudio");
   var mCur = -1;            // index of the loaded track, -1 = none loaded yet
   var mEditIdx = -1;        // playlist index being renamed, -1 = none
+  var mView = "list";       // "list" | "lyrics"
+  var mLyricsEditing = false, mLyricsDraft = "";
+  // Lyrics: baked-in defaults live on the PLAYLIST entry; user edits are stored locally,
+  // keyed by file src (same pattern as the song-name overrides).
+  var MUSIC_LYRICS_KEY = "compounder.music.lyrics";
+  function mLoadLyrics() { try { return JSON.parse(localStorage.getItem(MUSIC_LYRICS_KEY)) || {}; } catch (e) { return {}; } }
+  var mLyrics = mLoadLyrics();
+  function mLyric(s) { var o = mLyrics[s.src]; return (o != null && String(o).trim()) ? o : (s.lyrics || ""); }
+  function mSaveLyric(i, val) {
+    var s = PLAYLIST[i]; if (!s) return;
+    val = String(val || "").trim();
+    if (!val || val === (s.lyrics || "")) delete mLyrics[s.src]; else mLyrics[s.src] = val; // blank/unchanged → drop the override
+    try { localStorage.setItem(MUSIC_LYRICS_KEY, JSON.stringify(mLyrics)); } catch (e) {}
+  }
   // Custom song names are stored locally, keyed by file src (the default title is the fallback).
   var MUSIC_TITLES_KEY = "compounder.music.titles";
   function mLoadTitles() { try { return JSON.parse(localStorage.getItem(MUSIC_TITLES_KEY)) || {}; } catch (e) { return {}; } }
@@ -2158,6 +2232,36 @@
     if (dur) dur.textContent = mAudio.duration ? mFmt(mAudio.duration) : "0:00";
   }
 
+  // Render lyrics text: [Section] headers styled, blank lines become gaps.
+  function mLyricsHtml(t) {
+    return String(t).split(/\r?\n/).map(function (l) {
+      var s = l.trim();
+      if (!s) return '<div class="m-lyr-gap"></div>';
+      if (/^\[.*\]$/.test(s)) return '<div class="m-lyr-sec">' + escapeHtml(s.replace(/^\[|\]$/g, "")) + "</div>";
+      return '<div class="m-lyr-line">' + escapeHtml(s) + "</div>";
+    }).join("");
+  }
+  function mLyricsPanel() {
+    if (mCur < 0) return '<div class="m-lyr-empty">Play a song to see its lyrics.</div>';
+    var s = PLAYLIST[mCur];
+    if (mLyricsEditing) {
+      return '<div class="m-lyr-editwrap">' +
+        '<div class="m-lyr-editlabel">Lyrics · ' + escapeHtml(mTitle(s)) + '</div>' +
+        '<textarea class="m-lyr-ta" id="mLyrTa" placeholder="Paste the lyrics here… blank lines separate verses, and [Section] lines become headers.">' + escapeHtml(mLyricsDraft) + '</textarea>' +
+        '<div class="m-lyr-actions"><button class="m-lyr-save" data-mlyrsave>Save</button><button class="m-lyr-cancel" data-mlyrcancel>Cancel</button></div>' +
+      '</div>';
+    }
+    var lyr = mLyric(s);
+    if (!lyr) {
+      return '<div class="m-lyr-empty">No lyrics for <b>' + escapeHtml(mTitle(s)) + '</b> yet.' +
+        '<button class="m-lyr-add" data-mlyredit>＋ Add lyrics</button></div>';
+    }
+    return '<div class="m-lyr">' +
+      '<div class="m-lyr-top"><span class="m-lyr-for">' + escapeHtml(mTitle(s)) + '</span>' +
+        '<button class="m-lyr-editbtn" data-mlyredit title="Edit lyrics" aria-label="Edit lyrics">✎</button></div>' +
+      '<div class="m-lyr-body">' + mLyricsHtml(lyr) + '</div>' +
+    '</div>';
+  }
   function mRender() {
     var back = document.getElementById("musicModal");
     if (!back || !back.classList.contains("open")) return;
@@ -2186,6 +2290,10 @@
         '<button class="m-ctl m-play" id="mPlay" aria-label="' + (playing ? "Pause" : "Play") + '" title="' + (playing ? "Pause" : "Play") + '">' + (playing ? "⏸" : "▶") + '</button>' +
         '<button class="m-ctl" id="mNext" aria-label="Next track" title="Next">⏭</button>' +
       '</div>';
+    var tabs = '<div class="m-tabs">' +
+      '<button class="m-tab' + (mView === "list" ? " on" : "") + '" data-mview="list">Playlist</button>' +
+      '<button class="m-tab' + (mView === "lyrics" ? " on" : "") + '" data-mview="lyrics">Lyrics</button>' +
+    '</div>';
     var list = '<div class="m-list">' + PLAYLIST.map(function (s, i) {
       var isCur = i === mCur, editing = i === mEditIdx;
       var meta = editing
@@ -2201,7 +2309,8 @@
         meta + rightBtn +
         '</div>';
     }).join("") + '</div>';
-    back.innerHTML = '<div class="modal" style="--dc:#7cc4ff">' + head + np + list + '</div>';
+    var body = mView === "lyrics" ? mLyricsPanel() : list;
+    back.innerHTML = '<div class="modal" style="--dc:#7cc4ff">' + head + np + tabs + body + '</div>';
     mSeekTick();
   }
 
@@ -2209,6 +2318,7 @@
     var back = document.getElementById("musicModal");
     back.className = "modal-backdrop open";
     document.body.style.overflow = "hidden";
+    mView = "list"; mLyricsEditing = false; mEditIdx = -1;
     mRender();
   }
   function closeMusic() {
@@ -2239,9 +2349,26 @@
       if (i === mCur && !mAudio.paused) mAudio.pause(); else mLoad(i, true);
       return;
     }
+    if ((el = ev.target.closest("[data-mview]"))) {
+      var v = el.getAttribute("data-mview");
+      if (v !== mView) { if (v === "list") mLyricsEditing = false; mView = v; mRender(); }
+      return;
+    }
+    if (ev.target.closest("[data-mlyredit]")) {
+      if (mCur < 0) return;
+      mLyricsEditing = true; mLyricsDraft = mLyric(PLAYLIST[mCur]); mRender();
+      var lt = document.getElementById("mLyrTa"); if (lt) { lt.focus(); lt.setSelectionRange(lt.value.length, lt.value.length); }
+      return;
+    }
+    if (ev.target.closest("[data-mlyrsave]")) { mSaveLyric(mCur, mLyricsDraft); mLyricsEditing = false; mRender(); return; }
+    if (ev.target.closest("[data-mlyrcancel]")) { mLyricsEditing = false; mRender(); return; }
   });
   // Rename input: Enter/blur commits, Esc cancels (and doesn't close the modal).
   document.getElementById("musicModal").addEventListener("keydown", function (ev) {
+    if (ev.target.id === "mLyrTa") { // multiline: Enter inserts a newline; Esc cancels without closing the modal
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); mLyricsEditing = false; mRender(); }
+      return;
+    }
     if (!ev.target.matches || !ev.target.matches("[data-meditinput]")) return;
     if (ev.key === "Enter") { ev.preventDefault(); mCommitEdit(); }
     else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); mCancelEdit(); }
@@ -2253,6 +2380,7 @@
     setTimeout(function () { if (mEditIdx === idx) { mEditIdx = -1; mRender(); } }, 0); // leave a freshly-started edit alone
   });
   document.getElementById("musicModal").addEventListener("input", function (ev) {
+    if (ev.target.id === "mLyrTa") { mLyricsDraft = ev.target.value; return; } // keep the draft across re-renders
     if (ev.target.id !== "mSeek") return;
     ev.target.dataset.dragging = "1";
     var c = document.getElementById("mCurTime"); if (c) c.textContent = mFmt(+ev.target.value);
