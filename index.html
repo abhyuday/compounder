@@ -955,6 +955,9 @@
   .m-ctl:active { transform: scale(.92); }
   .m-play { width: 56px; height: 56px; border-radius: 50%; background: var(--dc, var(--accent)); color: #08121c; font-size: 24px; display: flex; align-items: center; justify-content: center; padding-left: 2px; }
   .m-play:hover { filter: brightness(1.08); }
+  .m-loop { font-size: 16px; opacity: .45; border-radius: 9px; padding: 7px; }
+  .m-loop:hover { opacity: .8; }
+  .m-loop.on { opacity: 1; background: rgba(124,196,255,0.16); box-shadow: inset 0 0 0 1px rgba(124,196,255,0.4); }
   .m-list { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
   .m-track { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: none; cursor: pointer; color: var(--text); padding: 9px 8px; border-radius: 10px; }
   .m-track[data-mtrack]:hover { background: var(--panel-2); }
@@ -2323,6 +2326,9 @@
   var mEditIdx = -1;        // playlist index being renamed, -1 = none
   var mView = "list";       // "list" | "lyrics"
   var mLyricsEditing = false, mLyricsDraft = "";
+  var mLoop = false;        // repeat the current track when it ends
+  try { mLoop = localStorage.getItem("compounder.music.loop") === "1"; } catch (e) {}
+  mAudio.loop = mLoop;      // native loop: when on, the track repeats and "ended" never fires
   // Lyrics: baked-in defaults live on the PLAYLIST entry; user edits are stored locally,
   // keyed by file src (same pattern as the song-name overrides).
   var MUSIC_LYRICS_KEY = "compounder.music.lyrics";
@@ -2443,6 +2449,7 @@
         '<button class="m-ctl" id="mPrev" aria-label="Previous track" title="Previous">⏮</button>' +
         '<button class="m-ctl m-play" id="mPlay" aria-label="' + (playing ? "Pause" : "Play") + '" title="' + (playing ? "Pause" : "Play") + '">' + (playing ? "⏸" : "▶") + '</button>' +
         '<button class="m-ctl" id="mNext" aria-label="Next track" title="Next">⏭</button>' +
+        '<button class="m-ctl m-loop' + (mLoop ? " on" : "") + '" data-mloop aria-pressed="' + (mLoop ? "true" : "false") + '" aria-label="Repeat this song" title="' + (mLoop ? "Repeat: on" : "Repeat: off") + '">🔁</button>' +
       '</div>';
     var tabs = '<div class="m-tabs">' +
       '<button class="m-tab' + (mView === "list" ? " on" : "") + '" data-mview="list">Playlist</button>' +
@@ -2498,6 +2505,11 @@
     if (ev.target.closest("#mPlay")) { mToggle(); return; }
     if (ev.target.closest("#mPrev")) { mPrev(); return; }
     if (ev.target.closest("#mNext")) { mNext(); return; }
+    if (ev.target.closest("[data-mloop]")) {
+      mLoop = !mLoop; mAudio.loop = mLoop;
+      try { localStorage.setItem("compounder.music.loop", mLoop ? "1" : "0"); } catch (e) {}
+      mRender(); return;
+    }
     if ((el = ev.target.closest("[data-mtrack]"))) {
       var i = +el.getAttribute("data-mtrack");
       if (i === mCur && !mAudio.paused) mAudio.pause(); else mLoad(i, true);
