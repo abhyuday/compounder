@@ -2315,11 +2315,65 @@
     "La la la, la la la, la la la\n" +
     "[Slow fade out]\n" +
     "[End]";
+  var SHIVOHAM_LYRICS =
+    "[Intro – whispered, tanpura drone]\n" +
+    "Who am I?\n" +
+    "Not this… not this…\n\n" +
+    "[Verse 1]\n" +
+    "I am not the mind that wanders, not the reason, not the pride,\n" +
+    "Not the memories I carry, not the self I build inside,\n" +
+    "Not the sight or sound or fragrance, not the earth or fire or air,\n" +
+    "Not the wide and open sky — I am more than what is there.\n\n" +
+    "[Verse 2]\n" +
+    "Not the breath that I am drawing, not the five great winds of life,\n" +
+    "Not the seven threads of body, not the sheaths that hold me tight,\n" +
+    "Not the hands that reach and gather, not the feet that walk the ground,\n" +
+    "Not the voice that sings this song — I'm the silence in the sound.\n\n" +
+    "[Chorus]\n" +
+    "I am awareness, I am bliss,\n" +
+    "Boundless and endless — I am this,\n" +
+    "Chidananda roopah,\n" +
+    "Shivoham, Shivoham.\n\n" +
+    "[Verse 3]\n" +
+    "There's no hatred, no attachment, no delusion and no greed,\n" +
+    "Not a trace of pride or envy, not a single bitter seed,\n" +
+    "I'm not duty, I'm not riches, not desire, not release —\n" +
+    "I'm already what I'm seeking, I am already peace.\n\n" +
+    "[Verse 4]\n" +
+    "Not the virtue, not the error, not the pleasure, not the pain,\n" +
+    "Not the chanting, not the pilgrim, not the altar's sacred flame,\n" +
+    "Not the food and not the eater, not the hunger to be fed —\n" +
+    "I'm the truth beneath the scriptures, I'm the word that's never said.\n\n" +
+    "[Chorus]\n" +
+    "I am awareness, I am bliss,\n" +
+    "Boundless and endless — I am this,\n" +
+    "Chidananda roopah,\n" +
+    "Shivoham, Shivoham.\n\n" +
+    "[Bridge – stripped back, intimate]\n" +
+    "Death and doubt can never touch me, birth has never drawn a line,\n" +
+    "There's no caste and there's no lineage, there's no border to define,\n" +
+    "Not a father, not a mother, not a kinsman, not a friend,\n" +
+    "Not the teacher, not the student — no beginning and no end.\n\n" +
+    "[Build – drums enter, rising]\n" +
+    "I am formless, ever-changeless, past what any thought can trace,\n" +
+    "I'm the light behind all senses, I am present in all space,\n" +
+    "I'm not bound and I'm not freed, there is nothing I must be —\n" +
+    "Ever balanced, ever whole, I am all, and all is me.\n\n" +
+    "[Final Chorus – full choir, soaring]\n" +
+    "I am awareness, I am bliss,\n" +
+    "Boundless and endless — I am this,\n" +
+    "I am the light when all is gone,\n" +
+    "Chidananda roopah,\n" +
+    "Shivoham, Shivoham!\n\n" +
+    "[Outro – fading, drone only]\n" +
+    "Shivoham… Shivoham…\n" +
+    "I am.";
   var PLAYLIST = [
     { title: "Live and Die on This Day", artist: "The Creed", src: "live-and-die-on-this-day.mp3", lyrics: CREED_LYRICS },
     { title: "Andhariki Teluse", artist: "Live and Die happier", src: "andhariki-teluse-live-and-die-happier.mp3", lyrics: ANDHARIKI_LYRICS },
     { title: "Bigger Than This", artist: "Male vocal", src: "bigger-than-this-male.mp3", lyrics: BIGGER_LYRICS },
     { title: "Better Than the Best Time", artist: "Family", src: "better-than-the-best-time.mp3", lyrics: BEST_TIME_LYRICS },
+    { title: "Shivoham", artist: "Nirvana Shatakam", src: "shivoham.mp3", lyrics: SHIVOHAM_LYRICS },
   ];
   var mAudio = document.getElementById("musicAudio");
   var mCur = -1;            // index of the loaded track, -1 = none loaded yet
@@ -2395,6 +2449,11 @@
       if (!s) return '<div class="m-lyr-gap"></div>';
       if (/^\[.*\]$/.test(s)) {
         var label = s.replace(/^\[|\]$/g, "");
+        var parts = label.split(/\s[–—-]\s/); // "Section – stage direction" → header + note
+        if (parts.length >= 2) {
+          return '<div class="m-lyr-sec">' + escapeHtml(parts[0].trim()) + "</div>" +
+            '<div class="m-lyr-note">' + escapeHtml(parts.slice(1).join(" – ").trim()) + "</div>";
+        }
         var isNote = label.indexOf(",") >= 0 || label.split(/\s+/).length >= 4; // a direction, not a section
         return '<div class="' + (isNote ? "m-lyr-note" : "m-lyr-sec") + '">' + escapeHtml(label) + "</div>";
       }
