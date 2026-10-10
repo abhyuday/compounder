@@ -377,6 +377,15 @@
   .f-del { flex: 0 0 auto; background: none; border: none; color: var(--faint); font-size: 17px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
   .f-del:hover { color: #e57373; }
   .f-loading { color: var(--muted); font-size: 14px; padding: 30px; text-align: center; }
+  .f-sec { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--accent); font-weight: 800; margin: 18px 2px 8px; }
+  .f-sec:first-child { margin-top: 2px; }
+  .f-secnote { font-size: 13px; color: var(--muted); line-height: 1.5; padding: 4px 2px 2px; }
+  .f-slist { display: flex; flex-direction: column; gap: 8px; }
+  .f-srow { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; }
+  .f-srow.off { opacity: .5; }
+  .f-smeta { flex: 1 1 auto; min-width: 0; font-size: 13.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .f-hidebtn { flex: 0 0 auto; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .f-hidebtn:hover { color: var(--text); border-color: #33404f; }
 
   /* Focus "start here" marker + celebration toast */
   .start-here { display: inline-block; font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: #241a04; background: var(--accent); border-radius: 999px; padding: 2px 7px; margin-left: 6px; font-weight: 700; vertical-align: 1px; }
@@ -2708,7 +2717,89 @@
   function focusDbDelete(id) { return focusStore("readwrite").then(function (s) { return new Promise(function (res, rej) { var r = s.delete(id); r.onsuccess = function () { res(); }; r.onerror = function () { rej(r.error); }; }); }); }
   function focusScope() { return session ? session.user.id : "anon"; }
   function focusUid() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 9)); }
-  function focusRecOf(im) { return { id: im.id, scope: im.scope, caption: im.caption || "", order: im.order || 0, w: im.w, h: im.h, type: im.type, blob: im.blob, ts: im.ts }; }
+  function focusRecOf(im) { return { id: im.id, scope: im.scope, caption: im.caption || "", order: im.order || 0, w: im.w, h: im.h, type: im.type, blob: im.blob, ts: im.ts, updated_at: im.updated_at || im.ts, deleted: !!im.deleted, storagePath: im.storagePath || null }; }
+
+  // --- Bundled stock images (shipped in the repo) — an inspiring baseline before you add your own. ---
+  var FOCUS_DEFAULTS = [
+    { id: "def-rise",    src: "focus/sunrise.svg",   caption: "Rise. Again." },
+    { id: "def-summit",  src: "focus/summit.svg",    caption: "The climb is the point." },
+    { id: "def-star",    src: "focus/northstar.svg", caption: "Keep your eyes on your own sky." },
+    { id: "def-horizon", src: "focus/horizon.svg",   caption: "There’s a bigger life than this." },
+    { id: "def-path",    src: "focus/path.svg",      caption: "The road’s still long — and you’re halfway there." },
+    { id: "def-seed",    src: "focus/seed.svg",      caption: "Small steps compound." }
+  ];
+  var FOCUS_HIDDEN_KEY = "compounder.focus.hiddenDefaults";
+  function focusHidden() { try { return JSON.parse(localStorage.getItem(FOCUS_HIDDEN_KEY)) || {}; } catch (e) { return {}; } }
+  function focusToggleDefault(id) { var h = focusHidden(); if (h[id]) delete h[id]; else h[id] = 1; try { localStorage.setItem(FOCUS_HIDDEN_KEY, JSON.stringify(h)); } catch (e) {} renderFocus(); }
+  // The merged slideshow list: your pictures first, then the suggested stock images you haven't hidden.
+  function focusViewList() {
+    var star = northstarText(), hidden = focusHidden();
+    var mine = focusImages.filter(function (im) { return !im.deleted; }).map(function (im) {
+      var own = im.caption && im.caption.trim();
+      return { id: im.id, url: im.url, caption: own ? im.caption.trim() : (star || ""), star: !own && !!star, isDefault: false };
+    });
+    var defs = FOCUS_DEFAULTS.filter(function (d) { return !hidden[d.id]; }).map(function (d) {
+      return { id: d.id, url: d.src, caption: d.caption || "", star: false, isDefault: true };
+    });
+    return mine.concat(defs);
+  }
+
+  // --- Supabase Storage sync (private pictures across devices) ---
+  // Binary lives in the private 'focus-images' bucket at {user_id}/{id}.jpg; metadata (caption,
+  // order, soft-delete) lives in the focus_images table. IndexedDB stays the offline cache and
+  // display source. All calls are best-effort: if the bucket/table don't exist yet, it's local-only.
+  var FOCUS_BUCKET = "focus-images";
+  function focusStoragePath(id) { return session.user.id + "/" + id + ".jpg"; }
+  function focusLocalToRow(im) {
+    return { id: im.id, user_id: session.user.id, storage_path: im.storagePath || focusStoragePath(im.id),
+      caption: im.caption || "", sort_order: im.order || 0, width: im.w || null, height: im.h || null,
+      deleted: !!im.deleted, updated_at: new Date(im.updated_at || im.ts || Date.now()).toISOString() };
+  }
+  function focusUploadRec(im) {
+    if (!sb || !session) return Promise.resolve();
+    var path = im.storagePath || focusStoragePath(im.id); im.storagePath = path;
+    return sb.storage.from(FOCUS_BUCKET).upload(path, im.blob, { contentType: im.type || "image/jpeg", upsert: true })
+      .then(function () { return sb.from("focus_images").upsert([focusLocalToRow(im)], { onConflict: "id" }); })
+      .then(function () { focusDbPut(focusRecOf(im)); }, function () {});
+  }
+  function focusPushRow(im) { if (!sb || !session) return Promise.resolve(); return sb.from("focus_images").upsert([focusLocalToRow(im)], { onConflict: "id" }).then(function () {}, function () {}); }
+  function focusPullRow(r) {
+    return sb.storage.from(FOCUS_BUCKET).download(r.storage_path).then(function (res) {
+      var blob = res && res.data; if (!blob) return;
+      var rec = { id: r.id, scope: session.user.id, caption: r.caption || "", order: r.sort_order || 0, w: r.width, h: r.height,
+        type: blob.type || "image/jpeg", blob: blob, ts: Date.parse(r.created_at) || Date.now(),
+        updated_at: Date.parse(r.updated_at) || Date.now(), deleted: false, storagePath: r.storage_path };
+      return focusDbPut(rec).then(function () { rec.url = URL.createObjectURL(blob); focusImages.push(rec); });
+    });
+  }
+  function focusApplyRemoteDelete(im) {
+    var i = focusImages.indexOf(im);
+    if (i >= 0) { if (im.url) { try { URL.revokeObjectURL(im.url); } catch (e) {} } focusImages.splice(i, 1); }
+    return focusDbDelete(im.id);
+  }
+  function focusSync() {
+    if (!sb || !session) return;
+    sb.from("focus_images").select("*").eq("user_id", session.user.id).then(function (res) {
+      if (res.error) return; // table missing → local-only
+      var rows = res.data || [], localById = {}, remoteById = {}, tasks = [];
+      focusImages.forEach(function (im) { localById[im.id] = im; });
+      rows.forEach(function (r) { remoteById[r.id] = r; });
+      rows.forEach(function (r) {
+        var rts = Date.parse(r.updated_at) || 0, local = localById[r.id];
+        if (!local) { if (!r.deleted) tasks.push(focusPullRow(r).catch(function () {})); return; }
+        if (rts > (local.updated_at || local.ts || 0)) {
+          if (r.deleted) { tasks.push(focusApplyRemoteDelete(local).catch(function () {})); }
+          else { local.caption = r.caption || ""; local.order = r.sort_order || 0; local.updated_at = rts; local.storagePath = r.storage_path; focusDbPut(focusRecOf(local)); }
+        }
+      });
+      focusImages.forEach(function (im) {
+        var r = remoteById[im.id];
+        if (!r) { tasks.push(focusUploadRec(im)); }
+        else if ((im.updated_at || im.ts || 0) > (Date.parse(r.updated_at) || 0)) { tasks.push(focusPushRow(im)); }
+      });
+      Promise.all(tasks).then(function () { focusImages.sort(function (a, b) { return (a.order || 0) - (b.order || 0); }); renderFocus(); });
+    }, function () {});
+  }
   function focusRevoke() { focusImages.forEach(function (im) { if (im.url) { try { URL.revokeObjectURL(im.url); } catch (e) {} } }); }
   function focusLoad() {
     var scope = focusScope();
@@ -2743,8 +2834,9 @@
     var chain = Promise.resolve();
     files.forEach(function (file, i) {
       chain = chain.then(function () { return focusProcess(file); }).then(function (p) {
-        var rec = { id: focusUid(), scope: scope, caption: "", order: baseOrder + i + 1, w: p.w, h: p.h, type: p.type, blob: p.blob, ts: Date.now() };
-        return focusDbPut(rec).then(function () { rec.url = URL.createObjectURL(rec.blob); focusImages.push(rec); });
+        var now = Date.now();
+        var rec = { id: focusUid(), scope: scope, caption: "", order: baseOrder + i + 1, w: p.w, h: p.h, type: p.type, blob: p.blob, ts: now, updated_at: now, deleted: false, storagePath: null };
+        return focusDbPut(rec).then(function () { rec.url = URL.createObjectURL(rec.blob); focusImages.push(rec); if (session) return focusUploadRec(rec); });
       }).catch(function () {});
     });
     chain.then(function () { focusBusy = false; renderFocus(); });
@@ -2752,57 +2844,65 @@
   function focusDelete(id) {
     var i = -1; for (var k = 0; k < focusImages.length; k++) if (focusImages[k].id === id) { i = k; break; }
     if (i < 0) return;
-    if (focusImages[i].url) { try { URL.revokeObjectURL(focusImages[i].url); } catch (e) {} }
+    var im = focusImages[i];
+    if (im.url) { try { URL.revokeObjectURL(im.url); } catch (e) {} }
     focusImages.splice(i, 1);
-    if (focusIdx >= focusImages.length) focusIdx = Math.max(0, focusImages.length - 1);
+    var n = focusViewList().length; if (focusIdx >= n) focusIdx = Math.max(0, n - 1);
     focusDbDelete(id).then(function () {}, function () {});
+    if (session) { // soft-delete propagates to other devices; drop the stored object
+      im.deleted = true; im.updated_at = Date.now(); focusPushRow(im);
+      if (sb) sb.storage.from(FOCUS_BUCKET).remove([im.storagePath || focusStoragePath(im.id)]).then(function () {}, function () {});
+    }
     renderFocus();
   }
   function focusReorder(from, to) {
     arrMove(focusImages, from, to);
-    focusImages.forEach(function (im, i) { im.order = i; focusDbPut(focusRecOf(im)).then(function () {}, function () {}); });
+    focusImages.forEach(function (im, i) { im.order = i; im.updated_at = Date.now(); focusDbPut(focusRecOf(im)).then(function () {}, function () {}); if (session) focusPushRow(im); });
     renderFocus();
   }
-  function focusGo(d) { if (focusImages.length < 2) return; focusIdx = (focusIdx + d + focusImages.length) % focusImages.length; renderFocus(); }
+  function focusGo(d) { var n = focusViewList().length; if (n < 2) return; focusIdx = (focusIdx + d + n) % n; renderFocus(); }
 
   function focusViewHtml() {
-    var star = northstarText();
+    var list = focusViewList();
     var top = '<div class="f-top"><span class="f-title">🧭 Focus</span><span class="f-spacer"></span>' +
-      (focusImages.length ? '<button class="f-iconbtn" data-fmanage title="Manage images" aria-label="Manage images">🗂</button>' : "") +
+      '<button class="f-iconbtn" data-fmanage title="Manage images" aria-label="Manage images">🗂</button>' +
       '<button class="f-iconbtn" data-fclose title="Close" aria-label="Close">✕</button></div>';
-    if (!focusImages.length) {
+    if (!list.length) {
       return '<div class="f-wrap">' + top +
         '<div class="f-empty"><div class="f-empty-ic">🧭</div><div class="f-empty-h">What matters most</div>' +
         '<div class="f-empty-p">Add a few images of the people and the life worth staying focused for. They’ll be here when you need to remember why.</div>' +
-        (star ? '<div class="f-empty-star">“' + escapeHtml(star) + '”</div>' : "") +
         '<button class="f-add-primary" data-fadd>＋ Add images</button></div></div>';
     }
-    if (focusIdx >= focusImages.length) focusIdx = 0;
-    var im = focusImages[focusIdx];
-    var ownCap = im.caption && im.caption.trim();
-    var capText = ownCap ? escapeHtml(im.caption.trim()) : (star ? escapeHtml(star) : "");
-    var nav = focusImages.length > 1 ? '<button class="f-nav f-prev" data-fprev aria-label="Previous image">‹</button><button class="f-nav f-next" data-fnext aria-label="Next image">›</button>' : "";
-    var cap = capText ? '<div class="f-cap' + (ownCap ? "" : " f-cap-star") + '">' + (ownCap ? "" : '<span class="f-cap-tag">Remember why</span>') + capText + '</div>' : "";
-    var dots = focusImages.length > 1 ? '<div class="f-dots">' + focusImages.map(function (_, i) { return '<button class="f-dot' + (i === focusIdx ? " on" : "") + '" data-fdot="' + i + '" aria-label="Go to image ' + (i + 1) + '"></button>'; }).join("") + "</div>" : "";
-    return '<div class="f-wrap">' + top + '<div class="f-stage"><img class="f-img" src="' + im.url + '" alt="Focus image">' + nav + "</div>" + cap + dots + "</div>";
+    if (focusIdx >= list.length) focusIdx = 0;
+    var it = list[focusIdx];
+    var nav = list.length > 1 ? '<button class="f-nav f-prev" data-fprev aria-label="Previous image">‹</button><button class="f-nav f-next" data-fnext aria-label="Next image">›</button>' : "";
+    var cap = it.caption ? '<div class="f-cap' + (it.star ? " f-cap-star" : "") + '">' + (it.star ? '<span class="f-cap-tag">Remember why</span>' : "") + escapeHtml(it.caption) + "</div>" : "";
+    var dots = list.length > 1 ? '<div class="f-dots">' + list.map(function (_, i) { return '<button class="f-dot' + (i === focusIdx ? " on" : "") + '" data-fdot="' + i + '" aria-label="Go to image ' + (i + 1) + '"></button>'; }).join("") + "</div>" : "";
+    return '<div class="f-wrap">' + top + '<div class="f-stage"><img class="f-img" src="' + it.url + '" alt="Focus image">' + nav + "</div>" + cap + dots + "</div>";
   }
   function focusManageHtml() {
     var top = '<div class="f-top"><span class="f-title">🧭 Focus · Manage</span><span class="f-spacer"></span>' +
       '<button class="f-iconbtn" data-fadd title="Add images" aria-label="Add images">＋</button>' +
-      (focusImages.length ? '<button class="f-iconbtn" data-fview title="Done" aria-label="Done">✓</button>' : "") +
+      '<button class="f-iconbtn" data-fview title="Done" aria-label="Done">✓</button>' +
       '<button class="f-iconbtn" data-fclose title="Close" aria-label="Close">✕</button></div>';
     var busy = focusBusy ? '<div class="f-busy">Adding images…</div>' : "";
-    if (!focusImages.length && !focusBusy) {
-      return '<div class="f-wrap">' + top + '<div class="f-empty"><div class="f-empty-ic">🖼️</div><div class="f-empty-h">No images yet</div>' +
-        '<div class="f-empty-p">Add photos that pull you back to what matters.</div><button class="f-add-primary" data-fadd>＋ Add images</button></div></div>';
-    }
-    var rows = focusImages.map(function (im) {
+    var mine = focusImages.filter(function (im) { return !im.deleted; });
+    var rows = mine.map(function (im) {
       return '<div class="f-mrow" data-fid="' + im.id + '"><span class="f-drag" data-fdrag title="Drag to reorder">⠿</span>' +
         '<img class="f-thumb" src="' + im.url + '" alt=""><input class="f-capin" data-fcap="' + im.id + '" value="' + escapeHtml(im.caption || "") + '" placeholder="Add a note (optional)" maxlength="140">' +
         '<button class="f-del" data-fdel="' + im.id + '" title="Remove" aria-label="Remove">✕</button></div>';
     }).join("");
-    return '<div class="f-wrap">' + top + '<div class="f-mscroll">' + busy + '<div class="f-mhint">Drag ⠿ to reorder · most important first</div>' +
-      '<div class="f-mlist">' + rows + '</div><button class="f-add-primary f-add-block" data-fadd>＋ Add more images</button></div></div>';
+    var yours = '<div class="f-sec">Your pictures</div>' +
+      (mine.length ? '<div class="f-mhint">Drag ⠿ to reorder · most important first</div><div class="f-mlist">' + rows + "</div>"
+                   : '<div class="f-secnote">No pictures yet — add photos that pull you back to what matters.</div>') +
+      '<button class="f-add-primary f-add-block" data-fadd>＋ Add images</button>';
+    var hidden = focusHidden();
+    var sugg = '<div class="f-sec">Suggested</div><div class="f-mhint">Built-in images — hide any you don’t want to see.</div><div class="f-slist">' +
+      FOCUS_DEFAULTS.map(function (d) { var off = !!hidden[d.id];
+        return '<div class="f-srow' + (off ? " off" : "") + '"><img class="f-thumb" src="' + d.src + '" alt=""><div class="f-smeta">' + escapeHtml(d.caption) + "</div>" +
+          '<button class="f-hidebtn" data-fhide="' + d.id + '">' + (off ? "Show" : "Hide") + "</button></div>";
+      }).join("") + "</div>";
+    return '<div class="f-wrap">' + top + '<div class="f-mscroll">' + busy + yours + sugg + "</div></div>";
   }
   function renderFocus() {
     var ov = document.getElementById("focusOverlay"); if (!ov || !focusOpen) return;
@@ -2817,7 +2917,7 @@
     var ov = document.getElementById("focusOverlay"); ov.classList.add("open");
     if (!focusDbOk()) { ov.innerHTML = '<div class="f-wrap"><div class="f-top"><span class="f-title">🧭 Focus</span><span class="f-spacer"></span><button class="f-iconbtn" data-fclose>✕</button></div><div class="f-empty"><div class="f-empty-p">Image storage isn’t available in this browser.</div></div></div>'; return; }
     ov.innerHTML = '<div class="f-wrap"><div class="f-loading">Loading…</div></div>';
-    focusLoad().then(function () { renderFocus(); });
+    focusLoad().then(function () { renderFocus(); if (session) focusSync(); });
   }
   function closeFocus() {
     focusOpen = false; document.body.style.overflow = "";
@@ -2836,6 +2936,7 @@
     if (ev.target.closest("[data-fnext]")) { focusGo(1); return; }
     if ((el = ev.target.closest("[data-fdot]"))) { focusIdx = +el.getAttribute("data-fdot"); renderFocus(); return; }
     if ((el = ev.target.closest("[data-fdel]"))) { focusDelete(el.getAttribute("data-fdel")); return; }
+    if ((el = ev.target.closest("[data-fhide]"))) { focusToggleDefault(el.getAttribute("data-fhide")); return; }
   });
   document.getElementById("focusOverlay").addEventListener("input", function (ev) {
     var el = ev.target.closest && ev.target.closest("[data-fcap]"); if (!el) return;
@@ -2843,7 +2944,13 @@
   });
   document.getElementById("focusOverlay").addEventListener("change", function (ev) {
     var el = ev.target.closest && ev.target.closest("[data-fcap]"); if (!el) return;
-    var id = el.getAttribute("data-fcap"); for (var i = 0; i < focusImages.length; i++) if (focusImages[i].id === id) { focusDbPut(focusRecOf(focusImages[i])).then(function () {}, function () {}); break; }
+    var id = el.getAttribute("data-fcap");
+    for (var i = 0; i < focusImages.length; i++) if (focusImages[i].id === id) {
+      focusImages[i].updated_at = Date.now();
+      focusDbPut(focusRecOf(focusImages[i])).then(function () {}, function () {});
+      if (session) focusPushRow(focusImages[i]);
+      break;
+    }
   });
   document.addEventListener("keydown", function (ev) {
     if (!focusOpen) return;

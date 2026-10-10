@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000">
+  <defs>
+    <linearGradient id="p-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17233b"/>
+      <stop offset="0.5" stop-color="#43557d"/>
+      <stop offset="0.72" stop-color="#caa05e"/>
+      <stop offset="0.78" stop-color="#eccb84"/>
+    </linearGradient>
+    <linearGradient id="p-ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a3a2c"/>
+      <stop offset="1" stop-color="#121a16"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="620" fill="url(#p-sky)"/>
+  <circle cx="800" cy="600" r="70" fill="#fff0cf" opacity="0.92"/>
+  <path d="M0 620 Q 400 560 800 600 Q 1200 560 1600 620 L1600 1000 L0 1000 Z" fill="url(#p-ground)"/>
+  <path d="M770 600 Q 740 760 560 880 L420 1000 L1180 1000 L1040 880 Q 860 760 830 600 Z" fill="#c9b386"/>
+  <path d="M795 600 L805 600 Q 820 760 980 880 L1040 1000 L560 1000 L620 880 Q 780 760 795 600 Z" fill="#ddc99a" opacity="0.55"/>
+  <g stroke="#f6edd7" stroke-width="5" opacity="0.55" stroke-linecap="round">
+    <line x1="800" y1="640" x2="800" y2="672"/>
+    <line x1="800" y1="716" x2="800" y2="760"/>
+    <line x1="800" y1="812" x2="800" y2="872"/>
+  </g>
+</svg>

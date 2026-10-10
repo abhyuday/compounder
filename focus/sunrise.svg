@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1b2e"/>
+      <stop offset="0.45" stop-color="#2b3a63"/>
+      <stop offset="0.72" stop-color="#b9633f"/>
+      <stop offset="0.9" stop-color="#e0a24a"/>
+      <stop offset="1" stop-color="#f3c66b"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff3d6"/>
+      <stop offset="0.5" stop-color="#ffd37a"/>
+      <stop offset="1" stop-color="#ffb347" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <circle cx="800" cy="720" r="320" fill="url(#sun)"/>
+  <circle cx="800" cy="720" r="120" fill="#fff0cf"/>
+  <g fill="#0e1116">
+    <path d="M0 760 L240 600 L430 720 L650 560 L820 700 L1010 540 L1230 710 L1420 580 L1600 720 L1600 1000 L0 1000 Z" opacity="0.5"/>
+    <path d="M0 860 L260 700 L520 830 L780 680 L1040 840 L1320 710 L1600 850 L1600 1000 L0 1000 Z"/>
+  </g>
+  <g fill="#fdf3dd" opacity="0.85">
+    <circle cx="220" cy="180" r="2.5"/><circle cx="420" cy="120" r="2"/><circle cx="1180" cy="150" r="2.5"/><circle cx="1360" cy="230" r="2"/><circle cx="640" cy="90" r="1.8"/>
+  </g>
+</svg>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000">
+  <defs>
+    <linearGradient id="h-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#14243f"/>
+      <stop offset="0.55" stop-color="#5a6f98"/>
+      <stop offset="0.62" stop-color="#e8b26a"/>
+      <stop offset="0.64" stop-color="#f4d58a"/>
+    </linearGradient>
+    <linearGradient id="h-sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9a85a"/>
+      <stop offset="0.12" stop-color="#4a6b8f"/>
+      <stop offset="1" stop-color="#16263d"/>
+    </linearGradient>
+    <radialGradient id="h-sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff4da"/>
+      <stop offset="1" stop-color="#ffcf80" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="640" fill="url(#h-sky)"/>
+  <circle cx="800" cy="620" r="260" fill="url(#h-sun)"/>
+  <circle cx="800" cy="628" r="86" fill="#fff1cf"/>
+  <rect y="640" width="1600" height="360" fill="url(#h-sea)"/>
+  <g fill="#fff1cf" opacity="0.5">
+    <rect x="740" y="700" width="120" height="8" rx="4"/>
+    <rect x="720" y="740" width="160" height="7" rx="3.5" opacity="0.8"/>
+    <rect x="700" y="792" width="200" height="6" rx="3" opacity="0.6"/>
+    <rect x="676" y="856" width="248" height="6" rx="3" opacity="0.4"/>
+  </g>
+</svg>
